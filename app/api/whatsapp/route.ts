@@ -99,6 +99,9 @@ export async function POST(req: NextRequest) {
     qrcode = qr?.qrcode?.base64 || qr?.base64 || null
   }
 
+  // Remove conflito de instance_name pertencente a outro user
+  await supabaseAdmin().from('instances').delete().eq('instance_name', instanceName).neq('user_id', user.id)
+
   // Salva no Supabase
   await supabaseAdmin().from('instances').upsert({
     user_id: user.id,
