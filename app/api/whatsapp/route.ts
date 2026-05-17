@@ -111,7 +111,11 @@ export async function POST(req: NextRequest) {
   if (insertError) console.log('[whatsapp POST] insert error:', insertError.message)
 
   if (alreadyConnected) {
-    const phone = state?.instance?.wuid?.replace('@s.whatsapp.net', '') || null
+    const phone = (state?.instance?.wuid || state?.instance?.ownerJid || '')
+      .replace('@s.whatsapp.net', '') || null
+    if (phone) {
+      await supabaseAdmin().from('instances').update({ phone_number: phone }).eq('instance_name', instanceName)
+    }
     return NextResponse.json({ instance: instanceName, connected: true, phone })
   }
 
