@@ -34,14 +34,17 @@ export async function GET(req: NextRequest) {
   const user = await getUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { data: inst, error: instError } = await supabaseAdmin()
+  const { data: rows } = await supabaseAdmin()
     .from('instances')
     .select('instance_name, status, phone_number')
     .eq('user_id', user.id)
     .eq('active', true)
-    .single()
+    .order('created_at', { ascending: false })
+    .limit(1)
 
-  if (!inst) return NextResponse.json({ connected: false, instance: null, _debug: { reason: 'no_supabase_record', user_id: user.id, error: instError?.message } })
+  const inst = rows?.[0] ?? null
+
+  if (!inst) return NextResponse.json({ connected: false, instance: null, _debug: { reason: 'no_supabase_record', user_id: user.id } })
 
   const state = await evo('GET', `/instance/connectionState/${inst.instance_name}`)
 
@@ -120,14 +123,15 @@ export async function DELETE(req: NextRequest) {
   const user = await getUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { data: inst } = await supabaseAdmin()
+  const { data: delRows } = await supabaseAdmin()
     .from('instances')
     .select('instance_name')
     .eq('user_id', user.id)
     .eq('active', true)
-    .single()
+    .limit(1)
 
-  if (inst) await evo('DELETE', `/instance/logout/${inst.instance_name}`)
+  const delInst = delRows?.[0] ?? null
+  if (delInst) await evo('DELETE', `/instance/logout/${delInst.instance_name}`)
 
   return NextResponse.json({ ok: true })
 }
