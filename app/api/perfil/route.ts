@@ -12,22 +12,23 @@ async function getUserId(req: NextRequest): Promise<string | null> {
   return user?.id ?? null
 }
 
+function supabaseAdmin() {
+  const key = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, key)
+}
+
 export async function GET(req: NextRequest) {
   const userId = await getUserId(req)
   if (!userId) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin()
     .from('users')
     .select('email, full_name, whatsapp')
     .eq('id', userId)
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+  if (error) return NextResponse.json({ email: '', full_name: '', whatsapp: '' })
+  return NextResponse.json(data ?? { email: '', full_name: '', whatsapp: '' })
 }
 
 export async function PATCH(req: NextRequest) {
@@ -36,14 +37,9 @@ export async function PATCH(req: NextRequest) {
 
   const { full_name, whatsapp } = await req.json()
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!
-  )
-  const { error } = await supabase
+  const { error } = await supabaseAdmin()
     .from('users')
-    .update({ full_name, whatsapp, updated_at: new Date().toISOString() })
-    .eq('id', userId)
+    .upsert({ id: userId, full_name, whatsapp, updated_at: new Date().toISOString() }, { onConflict: 'id' })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
