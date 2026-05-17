@@ -45,7 +45,6 @@ export async function GET(req: NextRequest) {
   if (!inst) return NextResponse.json({ connected: false, instance: null })
 
   const state = await evo('GET', `/instance/connectionState/${inst.instance_name}`)
-  console.log('[evo state]', JSON.stringify(state).substring(0, 200))
 
   if (state?.status === 404 || state?.response?.message?.[0]?.includes('does not exist')) {
     return NextResponse.json({ connected: false, instance: null })
