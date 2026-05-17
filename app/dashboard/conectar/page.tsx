@@ -187,7 +187,7 @@ export default function ConectarPage() {
           </p>
 
           <button
-            onClick={verificarStatus}
+            onClick={() => verificarStatus(false)}
             className="w-full border border-gray-200 text-gray-600 text-sm font-medium rounded-xl py-2.5 hover:bg-gray-50 transition-colors"
           >
             Atualizar agora
