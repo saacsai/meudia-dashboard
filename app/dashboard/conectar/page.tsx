@@ -12,7 +12,6 @@ export default function ConectarPage() {
   const [estado, setEstado] = useState<Estado>('carregando')
   const [qrcode, setQrcode] = useState<string | null>(null)
   const [phone, setPhone] = useState<string | null>(null)
-  const [instance, setInstance] = useState<string | null>(null)
   const [criando, setCriando] = useState(false)
   const [desconectando, setDesconectando] = useState(false)
   const [erro, setErro] = useState('')
@@ -37,10 +36,8 @@ export default function ConectarPage() {
       if (data.connected) {
         setEstado('conectado')
         setPhone(data.phone)
-        setInstance(data.instance)
       } else if (data.instance) {
         setEstado('aguardando_qr')
-        setInstance(data.instance)
         if (data.qrcode) setQrcode(data.qrcode)
       } else {
         // sem instância — só muda estado no carregamento inicial, não no polling
@@ -72,7 +69,6 @@ export default function ConectarPage() {
     })
     const data = await res.json()
     if (data.error) { setErro(data.error); setCriando(false); return }
-    setInstance(data.instance)
     setQrcode(data.qrcode)
     setEstado('aguardando_qr')
     setCriando(false)
