@@ -22,11 +22,12 @@ export default function CompletePerfil() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!whatsapp.trim()) { setErro('Informe seu WhatsApp.'); return }
+    const clean = whatsapp.replace(/\D/g, '')
+    if (clean.length < 10) { setErro('Informe um número de WhatsApp válido (mín. 10 dígitos).'); return }
     setLoading(true)
     setErro('')
     const supabase = getSupabase()
-    const { error } = await supabase.auth.updateUser({ data: { whatsapp } })
+    const { error } = await supabase.auth.updateUser({ data: { whatsapp: clean } })
     if (error) { setErro(error.message); setLoading(false); return }
     window.location.href = '/dashboard'
   }
