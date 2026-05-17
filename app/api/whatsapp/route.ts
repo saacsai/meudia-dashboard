@@ -34,21 +34,20 @@ export async function GET(req: NextRequest) {
   const user = await getUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { data: rows, error: rowsError } = await supabaseAdmin()
+  const { data: rows } = await supabaseAdmin()
     .from('instances')
     .select('instance_name, status, phone_number')
     .eq('user_id', user.id)
+    .eq('active', true)
     .limit(1)
 
   const inst = rows?.[0] ?? null
-
-  if (!inst) return NextResponse.json({ connected: false, instance: null, _debug: { reason: 'no_supabase_record', user_id: user.id, rows, error: rowsError?.message } })
+  if (!inst) return NextResponse.json({ connected: false, instance: null })
 
   const state = await evo('GET', `/instance/connectionState/${inst.instance_name}`)
 
-  // Instância não existe na Evolution API — mostra botão de criar
   if (state?.status === 404 || state?.response?.message?.[0]?.includes('does not exist')) {
-    return NextResponse.json({ connected: false, instance: null, _debug: { reason: 'evo_404', raw: state } })
+    return NextResponse.json({ connected: false, instance: null })
   }
 
   const stateValue = state?.instance?.state ?? state?.state ?? ''
@@ -62,11 +61,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ connected: true, phone, instance: inst.instance_name })
   }
 
-  // Desconectado — busca QR
   const qr = await evo('GET', `/instance/connect/${inst.instance_name}`)
   const qrcode = qr?.qrcode?.base64 || qr?.base64 || null
 
-  return NextResponse.json({ connected: false, instance: inst.instance_name, qrcode, _debug: { reason: 'not_open', stateValue, raw: state } })
+  return NextResponse.json({ connected: false, instance: inst.instance_name, qrcode })
 }
 
 // POST — criar instância
@@ -76,33 +74,26 @@ export async function POST(req: NextRequest) {
 
   const instanceName = `meudia_${user.id.replace(/-/g, '').substring(0, 16)}`
 
-  // Tenta criar instância na Evolution API
   const created = await evo('POST', '/instance/create', {
     instanceName,
     integration: 'WHATSAPP-BAILEYS',
     qrcode: true,
   })
-  console.log('[whatsapp POST] create response:', JSON.stringify(created).substring(0, 300))
 
   if (created?.status === 401 || created?.error === 'Unauthorized') {
     return NextResponse.json({ error: 'Evolution API: chave inválida' }, { status: 500 })
   }
 
-  // QR pode vir direto na criação ou precisar de uma chamada separada
   let qrcode: string | null = created?.qrcode?.base64 || null
 
   if (!qrcode) {
-    // Instância já existia ou QR não veio — busca via /connect
     await new Promise(r => setTimeout(r, 1500))
     const qr = await evo('GET', `/instance/connect/${instanceName}`)
-    console.log('[whatsapp POST] connect response:', JSON.stringify(qr).substring(0, 300))
     qrcode = qr?.qrcode?.base64 || qr?.base64 || null
   }
 
-  // Remove conflito de instance_name pertencente a outro user
   await supabaseAdmin().from('instances').delete().eq('instance_name', instanceName).neq('user_id', user.id)
 
-  // Salva no Supabase
   await supabaseAdmin().from('instances').upsert({
     user_id: user.id,
     instance_name: instanceName,
