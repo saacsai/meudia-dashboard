@@ -34,17 +34,15 @@ export async function GET(req: NextRequest) {
   const user = await getUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { data: rows } = await supabaseAdmin()
+  const { data: rows, error: rowsError } = await supabaseAdmin()
     .from('instances')
     .select('instance_name, status, phone_number')
     .eq('user_id', user.id)
-    .eq('active', true)
-    .order('created_at', { ascending: false })
     .limit(1)
 
   const inst = rows?.[0] ?? null
 
-  if (!inst) return NextResponse.json({ connected: false, instance: null, _debug: { reason: 'no_supabase_record', user_id: user.id } })
+  if (!inst) return NextResponse.json({ connected: false, instance: null, _debug: { reason: 'no_supabase_record', user_id: user.id, rows, error: rowsError?.message } })
 
   const state = await evo('GET', `/instance/connectionState/${inst.instance_name}`)
 
