@@ -57,8 +57,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ connected: true, phone: inst.phone_number, instance: inst.instance_name })
   }
 
+  // Tenta buscar QR atualizado via /connect
   const qr = await evo('GET', `/instance/connect/${inst.instance_name}`)
-  const qrcode = qr?.base64 || qr?.qrcode?.base64 || null
+  // /connect retorna qrcode.base64 (com prefixo data:image) quando desconectado
+  const qrcode = qr?.qrcode?.base64 || qr?.base64 || null
 
   return NextResponse.json({
     connected: false,
@@ -85,9 +87,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Evolution API: chave inválida' }, { status: 500 })
   }
 
-  // Busca QR code (não vem no create, precisa chamar /connect)
-  const qr = await evo('GET', `/instance/connect/${instanceName}`)
-  const qrcode = qr?.base64 || qr?.qrcode?.base64 || null
+  // QR já vem na resposta do create em qrcode.base64 (inclui prefixo data:image/...)
+  const qrcode = created?.qrcode?.base64 || null
 
   // Salva no Supabase
   await supabaseAdmin().from('instances').upsert({

@@ -27,6 +27,7 @@ export default function ConectarPage() {
     const res = await fetch('/api/whatsapp', {
       headers: { Authorization: `Bearer ${token}` }
     })
+    if (!res.ok) return // ignora erros de rede silenciosamente
     const data = await res.json()
 
     if (data.connected) {
@@ -36,10 +37,9 @@ export default function ConectarPage() {
     } else if (data.instance) {
       setEstado('aguardando_qr')
       setInstance(data.instance)
-      setQrcode(data.qrcode)
-    } else {
-      setEstado('sem_instancia')
+      if (data.qrcode) setQrcode(data.qrcode) // só atualiza QR se veio um novo
     }
+    // se não tem instância no banco, não muda estado durante polling
   }, [])
 
   useEffect(() => {
@@ -157,7 +157,7 @@ export default function ConectarPage() {
             <div className="flex justify-center">
               <div className="border-2 border-gray-100 rounded-2xl p-3">
                 <Image
-                  src={`data:image/png;base64,${qrcode}`}
+                  src={qrcode}
                   alt="QR Code WhatsApp"
                   width={220}
                   height={220}
