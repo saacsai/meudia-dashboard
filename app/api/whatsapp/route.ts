@@ -51,16 +51,24 @@ export async function GET(req: NextRequest) {
   if (!inst) return NextResponse.json({ connected: false, instance: null })
 
   const state = await evo('GET', `/instance/connectionState/${inst.instance_name}`)
+  console.log('[whatsapp GET] connectionState:', JSON.stringify(state).substring(0, 400))
 
   // Instância não existe na Evolution API — mostra botão de criar
   if (state?.status === 404 || state?.response?.message?.[0]?.includes('does not exist')) {
     return NextResponse.json({ connected: false, instance: null })
   }
 
-  const connected = state?.instance?.state === 'open'
+  const stateValue = state?.instance?.state ?? state?.state ?? ''
+  const connected = stateValue === 'open'
 
   if (connected) {
-    return NextResponse.json({ connected: true, phone: inst.phone_number, instance: inst.instance_name })
+    // Tenta pegar o número do WhatsApp da resposta da Evolution API
+    const phone = state?.instance?.wuid?.replace('@s.whatsapp.net', '') || inst.phone_number || null
+    // Atualiza phone_number no Supabase se tiver
+    if (phone && !inst.phone_number) {
+      await supabaseAdmin().from('instances').update({ phone_number: phone }).eq('instance_name', inst.instance_name)
+    }
+    return NextResponse.json({ connected: true, phone, instance: inst.instance_name })
   }
 
   // Desconectado — busca QR
