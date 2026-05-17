@@ -94,20 +94,18 @@ export async function POST(req: NextRequest) {
 
   await supabaseAdmin().from('instances').delete().eq('instance_name', instanceName).neq('user_id', user.id)
 
-  await supabaseAdmin().from('instances').upsert({
+  const { error: upsertError } = await supabaseAdmin().from('instances').upsert({
     user_id: user.id,
     instance_name: instanceName,
     status: 'disconnected',
     active: true,
     paused: false,
     persona_name: 'MAIA',
-    persona_tone: 'profissional',
-    persona_response_size: 'curto',
-    persona_description: 'Sou MAIA, assistente profissional. Estou gerenciando as mensagens e garantindo que as prioridades sejam atendidas.',
-    response_hint: 'Retorno em breve. Mensagens urgentes têm prioridade.',
   }, { onConflict: 'user_id' })
 
-  return NextResponse.json({ instance: instanceName, qrcode })
+  if (upsertError) console.log('[whatsapp POST] upsert error:', upsertError.message)
+
+  return NextResponse.json({ instance: instanceName, qrcode, upsertError: upsertError?.message })
 }
 
 // DELETE — desconectar
