@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [senhaConfirm, setSenhaConfirm] = useState('')
+  const [whatsapp, setWhatsapp] = useState('')
   const [modo, setModo] = useState<'login' | 'cadastro' | 'recuperar'>('login')
   const [loading, setLoading] = useState(false)
   const [mensagem, setMensagem] = useState('')
@@ -36,7 +37,11 @@ export default function LoginPage() {
     setLoading(true)
     setErro('')
     const supabase = getSupabase()
-    const { error } = await supabase.auth.signUp({ email, password: senha })
+    const { error } = await supabase.auth.signUp({
+      email,
+      password: senha,
+      options: { data: { whatsapp } },
+    })
     if (error) { setErro(error.message); setLoading(false); return }
     setMensagem('Conta criada! Verifique seu email para confirmar o cadastro.')
     setLoading(false)
@@ -181,6 +186,17 @@ export default function LoginPage() {
               <input
                 type="email" value={email} onChange={e => setEmail(e.target.value)}
                 required autoFocus
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none transition-colors"
+                onFocus={e => e.target.style.borderColor = PRIMARY}
+                onBlur={e => e.target.style.borderColor = ''}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">WhatsApp</label>
+              <input
+                type="tel" value={whatsapp} onChange={e => setWhatsapp(e.target.value)}
+                placeholder="(11) 99999-9999"
+                required
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none transition-colors"
                 onFocus={e => e.target.style.borderColor = PRIMARY}
                 onBlur={e => e.target.style.borderColor = ''}
