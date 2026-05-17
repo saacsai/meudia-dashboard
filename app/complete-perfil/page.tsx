@@ -64,7 +64,7 @@ export default function CompletePerfil() {
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">WhatsApp</label>
             <input
-              type="tel"
+              type="text"
               value={whatsapp}
               onChange={e => setWhatsapp(e.target.value)}
               placeholder="(11) 99999-9999"
