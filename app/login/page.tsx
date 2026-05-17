@@ -8,6 +8,7 @@ const PRIMARY = '#2A5F6B'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
+  const [nome, setNome] = useState('')
   const [senha, setSenha] = useState('')
   const [senhaConfirm, setSenhaConfirm] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
@@ -40,7 +41,7 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signUp({
       email,
       password: senha,
-      options: { data: { whatsapp } },
+      options: { data: { full_name: nome, whatsapp } },
     })
     if (error) { setErro(error.message); setLoading(false); return }
     setMensagem('Conta criada! Verifique seu email para confirmar o cadastro.')
@@ -182,10 +183,21 @@ export default function LoginPage() {
         ) : (
           <form onSubmit={handleCadastro} className="space-y-4">
             <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Nome</label>
+              <input
+                type="text" value={nome} onChange={e => setNome(e.target.value)}
+                placeholder="Seu nome completo"
+                required autoFocus
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none transition-colors"
+                onFocus={e => e.target.style.borderColor = PRIMARY}
+                onBlur={e => e.target.style.borderColor = ''}
+              />
+            </div>
+            <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
               <input
                 type="email" value={email} onChange={e => setEmail(e.target.value)}
-                required autoFocus
+                required
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none transition-colors"
                 onFocus={e => e.target.style.borderColor = PRIMARY}
                 onBlur={e => e.target.style.borderColor = ''}
