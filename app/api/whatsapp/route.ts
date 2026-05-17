@@ -51,22 +51,23 @@ export async function GET(req: NextRequest) {
   if (!inst) return NextResponse.json({ connected: false, instance: null })
 
   const state = await evo('GET', `/instance/connectionState/${inst.instance_name}`)
+
+  // Instância não existe na Evolution API — mostra botão de criar
+  if (state?.status === 404 || state?.response?.message?.[0]?.includes('does not exist')) {
+    return NextResponse.json({ connected: false, instance: null })
+  }
+
   const connected = state?.instance?.state === 'open'
 
   if (connected) {
     return NextResponse.json({ connected: true, phone: inst.phone_number, instance: inst.instance_name })
   }
 
-  // Tenta buscar QR atualizado via /connect
+  // Desconectado — busca QR
   const qr = await evo('GET', `/instance/connect/${inst.instance_name}`)
-  // /connect retorna qrcode.base64 (com prefixo data:image) quando desconectado
   const qrcode = qr?.qrcode?.base64 || qr?.base64 || null
 
-  return NextResponse.json({
-    connected: false,
-    instance: inst.instance_name,
-    qrcode,
-  })
+  return NextResponse.json({ connected: false, instance: inst.instance_name, qrcode })
 }
 
 // POST — criar instância
