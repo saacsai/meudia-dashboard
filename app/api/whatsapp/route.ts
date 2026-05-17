@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
   const qr = await evo('GET', `/instance/connect/${inst.instance_name}`)
   const qrcode = qr?.qrcode?.base64 || qr?.base64 || null
 
-  return NextResponse.json({ connected: false, instance: inst.instance_name, qrcode })
+  return NextResponse.json({ connected: false, instance: inst.instance_name, qrcode, _debug: { stateValue, raw: state } })
 }
 
 // POST — criar instância
