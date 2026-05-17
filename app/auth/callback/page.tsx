@@ -15,20 +15,26 @@ export default function CallbackPage() {
       return
     }
 
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error || !session) {
+    async function resolve() {
+      let session = (await supabase.auth.getSession()).data.session
+
+      if (!session) {
         const code = params.get('code')
         if (code) {
-          supabase.auth.exchangeCodeForSession(code).then(({ error: err }) => {
-            window.location.href = err ? '/login?erro=link-invalido' : '/dashboard'
-          })
-        } else {
-          window.location.href = '/login?erro=link-invalido'
+          const { error: err } = await supabase.auth.exchangeCodeForSession(code)
+          if (err) { window.location.href = '/login?erro=link-invalido'; return }
+          session = (await supabase.auth.getSession()).data.session
         }
-        return
       }
-      window.location.href = '/dashboard'
-    })
+
+      if (!session) { window.location.href = '/login?erro=link-invalido'; return }
+
+      const whatsapp = session.user.user_metadata?.whatsapp
+      const provider = session.user.app_metadata?.provider
+      window.location.href = (!whatsapp && provider === 'google') ? '/complete-perfil' : '/dashboard'
+    }
+
+    resolve()
   }, [])
 
   return (
