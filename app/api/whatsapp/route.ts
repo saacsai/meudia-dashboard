@@ -77,19 +77,28 @@ export async function POST(req: NextRequest) {
 
   const instanceName = `meudia_${user.id.replace(/-/g, '').substring(0, 12)}`
 
-  // Cria instância na Evolution API
+  // Tenta criar instância na Evolution API
   const created = await evo('POST', '/instance/create', {
     instanceName,
     integration: 'WHATSAPP-BAILEYS',
     qrcode: true,
   })
+  console.log('[whatsapp POST] create response:', JSON.stringify(created).substring(0, 300))
 
   if (created?.status === 401 || created?.error === 'Unauthorized') {
     return NextResponse.json({ error: 'Evolution API: chave inválida' }, { status: 500 })
   }
 
-  // QR já vem na resposta do create em qrcode.base64 (inclui prefixo data:image/...)
-  const qrcode = created?.qrcode?.base64 || null
+  // QR pode vir direto na criação ou precisar de uma chamada separada
+  let qrcode: string | null = created?.qrcode?.base64 || null
+
+  if (!qrcode) {
+    // Instância já existia ou QR não veio — busca via /connect
+    await new Promise(r => setTimeout(r, 1500))
+    const qr = await evo('GET', `/instance/connect/${instanceName}`)
+    console.log('[whatsapp POST] connect response:', JSON.stringify(qr).substring(0, 300))
+    qrcode = qr?.qrcode?.base64 || qr?.base64 || null
+  }
 
   // Salva no Supabase
   await supabaseAdmin().from('instances').upsert({
