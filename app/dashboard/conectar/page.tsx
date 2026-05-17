@@ -67,6 +67,8 @@ export default function ConectarPage() {
     setQrcode(data.qrcode)
     setEstado('aguardando_qr')
     setCriando(false)
+    // polling imediato após criar para detectar conexão
+    setTimeout(verificarStatus, 6000)
   }
 
   async function desconectar() {
