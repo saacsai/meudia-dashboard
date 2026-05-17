@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
   const user = await getUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const instanceName = `meudia_${user.id.replace(/-/g, '').substring(0, 12)}`
+  const instanceName = `meudia_${user.id.replace(/-/g, '').substring(0, 16)}`
 
   // Tenta criar instância na Evolution API
   const created = await evo('POST', '/instance/create', {
