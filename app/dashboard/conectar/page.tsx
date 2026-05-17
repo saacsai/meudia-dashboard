@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import Image from 'next/image'
+
 import { getSupabase } from '@/lib/supabase'
 
 const PRIMARY = '#2A5F6B'
@@ -167,12 +167,13 @@ export default function ConectarPage() {
           {qrcode ? (
             <div className="flex justify-center">
               <div className="border-2 border-gray-100 rounded-2xl p-3">
-                <Image
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={qrcode}
                   alt="QR Code WhatsApp"
                   width={220}
                   height={220}
-                  unoptimized
+                  style={{ width: 220, height: 220 }}
                 />
               </div>
             </div>
