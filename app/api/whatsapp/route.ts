@@ -45,13 +45,14 @@ export async function GET(req: NextRequest) {
   if (!inst) return NextResponse.json({ connected: false, instance: null })
 
   const state = await evo('GET', `/instance/connectionState/${inst.instance_name}`)
+  console.log('[evo state]', JSON.stringify(state).substring(0, 200))
 
   if (state?.status === 404 || state?.response?.message?.[0]?.includes('does not exist')) {
     return NextResponse.json({ connected: false, instance: null })
   }
 
-  const stateValue = state?.instance?.state ?? state?.state ?? ''
-  const connected = stateValue === 'open'
+  const stateValue = (state?.instance?.state ?? state?.state ?? '').toLowerCase()
+  const connected = stateValue === 'open' || stateValue === 'authenticated' || stateValue === 'connected'
 
   if (connected) {
     const phone = state?.instance?.wuid?.replace('@s.whatsapp.net', '') || inst.phone_number || null
