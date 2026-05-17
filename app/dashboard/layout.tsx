@@ -11,9 +11,10 @@ const PRIMARY = '#2A5F6B'
 
 const NAV = [
   { href: '/dashboard',            label: 'Início',     icon: '⊞' },
+  { href: '/dashboard/conectar',   label: 'WhatsApp',   icon: '◉' },
   { href: '/dashboard/assistente', label: 'Assistente', icon: '✦' },
   { href: '/dashboard/contatos',   label: 'Contatos',   icon: '☰' },
-  { href: '/dashboard/digest',     label: 'Agenda',     icon: '◷' },
+  { href: '/dashboard/digest',     label: 'Digest',     icon: '◷' },
 ]
 
 type View = 'main' | 'perfil' | 'plano'

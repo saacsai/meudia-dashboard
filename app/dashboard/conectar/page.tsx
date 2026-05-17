@@ -1,0 +1,189 @@
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+import Image from 'next/image'
+import { getSupabase } from '@/lib/supabase'
+
+const PRIMARY = '#2A5F6B'
+
+type Estado = 'carregando' | 'sem_instancia' | 'aguardando_qr' | 'conectado' | 'erro'
+
+export default function ConectarPage() {
+  const [estado, setEstado] = useState<Estado>('carregando')
+  const [qrcode, setQrcode] = useState<string | null>(null)
+  const [phone, setPhone] = useState<string | null>(null)
+  const [instance, setInstance] = useState<string | null>(null)
+  const [criando, setCriando] = useState(false)
+  const [desconectando, setDesconectando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  async function getToken() {
+    const { data: { session } } = await getSupabase().auth.getSession()
+    return session?.access_token || ''
+  }
+
+  const verificarStatus = useCallback(async () => {
+    const token = await getToken()
+    const res = await fetch('/api/whatsapp', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const data = await res.json()
+
+    if (data.connected) {
+      setEstado('conectado')
+      setPhone(data.phone)
+      setInstance(data.instance)
+    } else if (data.instance) {
+      setEstado('aguardando_qr')
+      setInstance(data.instance)
+      setQrcode(data.qrcode)
+    } else {
+      setEstado('sem_instancia')
+    }
+  }, [])
+
+  useEffect(() => {
+    verificarStatus()
+  }, [verificarStatus])
+
+  // Polling enquanto aguarda leitura do QR
+  useEffect(() => {
+    if (estado !== 'aguardando_qr') return
+    const interval = setInterval(verificarStatus, 5000)
+    return () => clearInterval(interval)
+  }, [estado, verificarStatus])
+
+  async function criarInstancia() {
+    setCriando(true)
+    setErro('')
+    const token = await getToken()
+    const res = await fetch('/api/whatsapp', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const data = await res.json()
+    if (data.error) { setErro(data.error); setCriando(false); return }
+    setInstance(data.instance)
+    setQrcode(data.qrcode)
+    setEstado('aguardando_qr')
+    setCriando(false)
+  }
+
+  async function desconectar() {
+    setDesconectando(true)
+    const token = await getToken()
+    await fetch('/api/whatsapp', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    setEstado('sem_instancia')
+    setQrcode(null)
+    setPhone(null)
+    setDesconectando(false)
+  }
+
+  return (
+    <div className="max-w-md mx-auto space-y-4">
+
+      {estado === 'carregando' && (
+        <div className="text-sm text-gray-400">Verificando conexão…</div>
+      )}
+
+      {estado === 'conectado' && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: '#dcfce7' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-gray-900">WhatsApp conectado</p>
+              <p className="text-xs text-gray-500">{phone}</p>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500 border border-gray-100">
+            <span className="font-medium text-gray-700">Instância: </span>{instance}
+          </div>
+
+          <button
+            onClick={desconectar}
+            disabled={desconectando}
+            className="w-full border border-red-200 text-red-600 text-sm font-medium rounded-xl py-2.5 hover:bg-red-50 disabled:opacity-50 transition-colors"
+          >
+            {desconectando ? 'Desconectando…' : 'Desconectar WhatsApp'}
+          </button>
+        </div>
+      )}
+
+      {estado === 'sem_instancia' && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+          <div>
+            <h2 className="text-base font-bold text-gray-900 mb-1">Conectar WhatsApp</h2>
+            <p className="text-xs text-gray-500">
+              Vamos conectar seu WhatsApp para a BIA começar a gerenciar suas mensagens.
+            </p>
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
+            <p className="font-semibold">Antes de conectar:</p>
+            <p>O número conectado aqui será gerenciado pela IA. Recomendamos ter um <strong>segundo número</strong> para uso pessoal e chamadas de voz.</p>
+          </div>
+
+          {erro && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">{erro}</p>}
+
+          <button
+            onClick={criarInstancia}
+            disabled={criando}
+            className="w-full text-white text-sm font-medium rounded-xl py-2.5 disabled:opacity-50 transition-colors"
+            style={{ backgroundColor: PRIMARY }}
+          >
+            {criando ? 'Preparando…' : 'Gerar QR Code'}
+          </button>
+        </div>
+      )}
+
+      {estado === 'aguardando_qr' && (
+        <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
+          <div>
+            <h2 className="text-base font-bold text-gray-900 mb-1">Escaneie o QR Code</h2>
+            <p className="text-xs text-gray-500">
+              Abra o WhatsApp → Dispositivos conectados → Conectar dispositivo → aponte a câmera para o código abaixo.
+            </p>
+          </div>
+
+          {qrcode ? (
+            <div className="flex justify-center">
+              <div className="border-2 border-gray-100 rounded-2xl p-3">
+                <Image
+                  src={`data:image/png;base64,${qrcode}`}
+                  alt="QR Code WhatsApp"
+                  width={220}
+                  height={220}
+                  unoptimized
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="flex justify-center py-8">
+              <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: PRIMARY, borderTopColor: 'transparent' }} />
+            </div>
+          )}
+
+          <p className="text-xs text-center text-gray-400">
+            Atualizando automaticamente a cada 5 segundos…
+          </p>
+
+          <button
+            onClick={verificarStatus}
+            className="w-full border border-gray-200 text-gray-600 text-sm font-medium rounded-xl py-2.5 hover:bg-gray-50 transition-colors"
+          >
+            Atualizar agora
+          </button>
+        </div>
+      )}
+
+    </div>
+  )
+}
