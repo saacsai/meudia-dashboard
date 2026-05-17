@@ -30,12 +30,13 @@ export default function DashboardPage() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
 
-    const { data: inst } = await supabase
+    const { data: rows } = await supabase
       .from('instances')
       .select('*')
       .eq('user_id', session.user.id)
       .eq('active', true)
-      .single()
+      .limit(1)
+    const inst = rows?.[0] ?? null
 
     if (inst) {
       setInstance(inst)
@@ -88,15 +89,9 @@ export default function DashboardPage() {
             <h2 className="text-xl font-bold text-gray-900">{instance.persona_name}</h2>
             <p className="text-sm text-gray-500 mt-1">{instance.phone_number}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <div
-              className="w-2.5 h-2.5 rounded-full"
-              style={{ backgroundColor: instance.status === 'connected' ? '#16a34a' : '#d1d5db' }}
-            />
-            <span className="text-xs text-gray-500">
-              {instance.status === 'connected' ? 'Conectada' : 'Desconectada'}
-            </span>
-          </div>
+          <a href="/dashboard/conectar" className="text-xs font-medium hover:underline" style={{ color: PRIMARY }}>
+            WhatsApp →
+          </a>
         </div>
       </div>
 
@@ -138,8 +133,8 @@ export default function DashboardPage() {
           <p className="text-xs text-gray-400 mt-1">mensagens na fila</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-200 p-5">
-          <p className="text-xs text-gray-500 mb-1">Instância</p>
-          <p className="text-sm font-medium text-gray-900 mt-2">{instance.instance_name}</p>
+          <p className="text-xs text-gray-500 mb-1">Assistente</p>
+          <p className="text-sm font-medium text-gray-900 mt-2">{instance.persona_name}</p>
           <a href="/dashboard/assistente" className="text-xs mt-1 block hover:underline" style={{ color: PRIMARY }}>
             Configurar →
           </a>
