@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   const user = await getUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { data: inst } = await supabaseAnon()
+  const { data: inst } = await supabaseAdmin()
     .from('instances')
     .select('instance_name, status, phone_number')
     .eq('user_id', user.id)
@@ -130,7 +130,7 @@ export async function DELETE(req: NextRequest) {
   const user = await getUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { data: inst } = await supabaseAnon()
+  const { data: inst } = await supabaseAdmin()
     .from('instances')
     .select('instance_name')
     .eq('user_id', user.id)
