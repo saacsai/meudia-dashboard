@@ -114,10 +114,6 @@ export default function ConectarPage() {
             </div>
           </div>
 
-          <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500 border border-gray-100">
-            <span className="font-medium text-gray-700">Instância: </span>{instance}
-          </div>
-
           <button
             onClick={desconectar}
             disabled={desconectando}
