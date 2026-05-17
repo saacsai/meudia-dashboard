@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 const EVO_URL = 'https://evolution.saacs.com.br'
-const EVO_KEY_GLOBAL = '429683C4C977415CAAFCCE10F7D57E11'
-const EVO_KEY_INSTANCE = 'CA03A237-2DCC-4684-8989-0E615AE6220B'
+const EVO_KEY_GLOBAL = '28bad1a004a318d3f7ba983f466b7168'
+const EVO_KEY_INSTANCE = '28bad1a004a318d3f7ba983f466b7168'
 
 async function getUser(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '')
