@@ -22,34 +22,43 @@ export default function ConectarPage() {
     return session?.access_token || ''
   }
 
-  const verificarStatus = useCallback(async () => {
+  const verificarStatus = useCallback(async (isPolling = false) => {
     const token = await getToken()
-    const res = await fetch('/api/whatsapp', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    if (!res.ok) return // ignora erros de rede silenciosamente
-    const data = await res.json()
+    try {
+      const res = await fetch('/api/whatsapp', {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (!res.ok) {
+        if (!isPolling) setEstado('sem_instancia')
+        return
+      }
+      const data = await res.json()
 
-    if (data.connected) {
-      setEstado('conectado')
-      setPhone(data.phone)
-      setInstance(data.instance)
-    } else if (data.instance) {
-      setEstado('aguardando_qr')
-      setInstance(data.instance)
-      if (data.qrcode) setQrcode(data.qrcode) // só atualiza QR se veio um novo
+      if (data.connected) {
+        setEstado('conectado')
+        setPhone(data.phone)
+        setInstance(data.instance)
+      } else if (data.instance) {
+        setEstado('aguardando_qr')
+        setInstance(data.instance)
+        if (data.qrcode) setQrcode(data.qrcode)
+      } else {
+        // sem instância — só muda estado no carregamento inicial, não no polling
+        if (!isPolling) setEstado('sem_instancia')
+      }
+    } catch {
+      if (!isPolling) setEstado('sem_instancia')
     }
-    // se não tem instância no banco, não muda estado durante polling
   }, [])
 
   useEffect(() => {
-    verificarStatus()
+    verificarStatus(false) // carregamento inicial
   }, [verificarStatus])
 
   // Polling enquanto aguarda leitura do QR
   useEffect(() => {
     if (estado !== 'aguardando_qr') return
-    const interval = setInterval(verificarStatus, 5000)
+    const interval = setInterval(() => verificarStatus(true), 5000)
     return () => clearInterval(interval)
   }, [estado, verificarStatus])
 
@@ -68,7 +77,7 @@ export default function ConectarPage() {
     setEstado('aguardando_qr')
     setCriando(false)
     // polling imediato após criar para detectar conexão
-    setTimeout(verificarStatus, 6000)
+    setTimeout(() => verificarStatus(true), 6000)
   }
 
   async function desconectar() {
