@@ -54,7 +54,19 @@ export async function GET(req: NextRequest) {
   const connected = stateValue === 'open' || stateValue === 'authenticated' || stateValue === 'connected'
 
   if (connected) {
-    const phone = state?.instance?.wuid?.replace('@s.whatsapp.net', '') || inst.phone_number || null
+    let phone = (state?.instance?.wuid || state?.instance?.ownerJid || '')
+      .replace('@s.whatsapp.net', '') || inst.phone_number || null
+
+    if (!phone) {
+      // Tenta buscar o número via fetchInstances
+      const info = await evo('GET', `/instance/fetchInstances`)
+      const found = Array.isArray(info)
+        ? info.find((i: { instance?: { instanceName?: string } }) => i.instance?.instanceName === inst.instance_name)
+        : null
+      phone = found?.instance?.ownerJid?.replace('@s.whatsapp.net', '') ||
+              found?.instance?.wuid?.replace('@s.whatsapp.net', '') || null
+    }
+
     if (phone && !inst.phone_number) {
       await supabaseAdmin().from('instances').update({ phone_number: phone }).eq('instance_name', inst.instance_name)
     }

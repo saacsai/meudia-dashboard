@@ -30,16 +30,20 @@ export default function CompletePerfil() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setErro('Sessão expirada.'); setLoading(false); return }
 
-    // Salva no auth metadata
+    // Salva na tabela users via API (usa service key, bypassa RLS)
+    const res = await fetch('/api/perfil', {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ full_name: nome, whatsapp: clean }),
+    })
+    if (!res.ok) { setErro('Erro ao salvar perfil.'); setLoading(false); return }
+
+    // Salva também no auth metadata
     await supabase.auth.updateUser({ data: { whatsapp: clean } })
 
-    // Salva na tabela users (upsert garante que funciona para novos e existentes)
-    const { error } = await supabase
-      .from('users')
-      .update({ whatsapp: clean, full_name: nome, updated_at: new Date().toISOString() })
-      .eq('id', session.user.id)
-
-    if (error) { setErro(error.message); setLoading(false); return }
     window.location.href = '/dashboard'
   }
 
