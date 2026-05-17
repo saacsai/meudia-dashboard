@@ -101,10 +101,10 @@ export default function LoginPage() {
         </div>
 
         <h1 className="text-lg font-bold text-gray-900 mb-1">
-          {modo === 'login' ? 'Acessar dashboard' : 'Criar conta'}
+          {modo === 'login' ? 'Acessar dashboard' : modo === 'cadastro' ? 'Criar conta' : 'Recuperar senha'}
         </h1>
         <p className="text-sm text-gray-500 mb-6">
-          {modo === 'login' ? 'Entre com seu email e senha.' : 'Preencha os dados para criar sua conta.'}
+          {modo === 'login' ? 'Entre com seu email e senha.' : modo === 'cadastro' ? 'Preencha os dados para criar sua conta.' : 'Digite seu email para receber o link de recuperação.'}
         </p>
 
         {modo === 'login' ? (
@@ -148,7 +148,6 @@ export default function LoginPage() {
           </form>
         ) : modo === 'recuperar' ? (
           <form onSubmit={handleRecuperar} className="space-y-4">
-            <p className="text-sm text-gray-500 -mt-3 mb-2">Digite seu email e enviamos um link para redefinir a senha.</p>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
               <input
