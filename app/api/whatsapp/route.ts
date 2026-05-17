@@ -34,30 +34,27 @@ export async function GET(req: NextRequest) {
   const user = await getUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { data: inst } = await supabaseAdmin()
+  const { data: inst, error: instError } = await supabaseAdmin()
     .from('instances')
     .select('instance_name, status, phone_number')
     .eq('user_id', user.id)
     .eq('active', true)
     .single()
 
-  if (!inst) return NextResponse.json({ connected: false, instance: null })
+  if (!inst) return NextResponse.json({ connected: false, instance: null, _debug: { reason: 'no_supabase_record', user_id: user.id, error: instError?.message } })
 
   const state = await evo('GET', `/instance/connectionState/${inst.instance_name}`)
-  console.log('[whatsapp GET] connectionState:', JSON.stringify(state).substring(0, 400))
 
   // Instância não existe na Evolution API — mostra botão de criar
   if (state?.status === 404 || state?.response?.message?.[0]?.includes('does not exist')) {
-    return NextResponse.json({ connected: false, instance: null })
+    return NextResponse.json({ connected: false, instance: null, _debug: { reason: 'evo_404', raw: state } })
   }
 
   const stateValue = state?.instance?.state ?? state?.state ?? ''
   const connected = stateValue === 'open'
 
   if (connected) {
-    // Tenta pegar o número do WhatsApp da resposta da Evolution API
     const phone = state?.instance?.wuid?.replace('@s.whatsapp.net', '') || inst.phone_number || null
-    // Atualiza phone_number no Supabase se tiver
     if (phone && !inst.phone_number) {
       await supabaseAdmin().from('instances').update({ phone_number: phone }).eq('instance_name', inst.instance_name)
     }
@@ -68,7 +65,7 @@ export async function GET(req: NextRequest) {
   const qr = await evo('GET', `/instance/connect/${inst.instance_name}`)
   const qrcode = qr?.qrcode?.base64 || qr?.base64 || null
 
-  return NextResponse.json({ connected: false, instance: inst.instance_name, qrcode, _debug: { stateValue, raw: state } })
+  return NextResponse.json({ connected: false, instance: inst.instance_name, qrcode, _debug: { reason: 'not_open', stateValue, raw: state } })
 }
 
 // POST — criar instância
