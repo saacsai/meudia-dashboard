@@ -84,9 +84,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Evolution API: chave inválida' }, { status: 500 })
   }
 
+  // Verifica se já está conectada
+  const state = await evo('GET', `/instance/connectionState/${instanceName}`)
+  const stateValue = (state?.instance?.state ?? state?.state ?? '').toLowerCase()
+  const alreadyConnected = stateValue === 'open' || stateValue === 'authenticated' || stateValue === 'connected'
+
   let qrcode: string | null = created?.qrcode?.base64 || null
 
-  if (!qrcode) {
+  if (!alreadyConnected && !qrcode) {
     await new Promise(r => setTimeout(r, 1500))
     const qr = await evo('GET', `/instance/connect/${instanceName}`)
     qrcode = qr?.qrcode?.base64 || qr?.base64 || null
@@ -97,13 +102,18 @@ export async function POST(req: NextRequest) {
   const { error: upsertError } = await supabaseAdmin().from('instances').upsert({
     user_id: user.id,
     instance_name: instanceName,
-    status: 'disconnected',
+    status: alreadyConnected ? 'connected' : 'disconnected',
     active: true,
     paused: false,
     persona_name: 'MAIA',
   }, { onConflict: 'user_id' })
 
   if (upsertError) console.log('[whatsapp POST] upsert error:', upsertError.message)
+
+  if (alreadyConnected) {
+    const phone = state?.instance?.wuid?.replace('@s.whatsapp.net', '') || null
+    return NextResponse.json({ instance: instanceName, connected: true, phone, upsertError: upsertError?.message })
+  }
 
   return NextResponse.json({ instance: instanceName, qrcode, upsertError: upsertError?.message })
 }

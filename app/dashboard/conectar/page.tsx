@@ -69,6 +69,12 @@ export default function ConectarPage() {
     })
     const data = await res.json()
     if (data.error) { setErro(data.error); setCriando(false); return }
+    if (data.connected) {
+      setPhone(data.phone)
+      setEstado('conectado')
+      setCriando(false)
+      return
+    }
     setQrcode(data.qrcode)
     setEstado('aguardando_qr')
     setCriando(false)
