@@ -97,25 +97,25 @@ export async function POST(req: NextRequest) {
     qrcode = qr?.qrcode?.base64 || qr?.base64 || null
   }
 
-  await supabaseAdmin().from('instances').delete().eq('instance_name', instanceName).neq('user_id', user.id)
-
-  const { error: upsertError } = await supabaseAdmin().from('instances').upsert({
+  // Limpa qualquer linha existente para este user e insere nova
+  await supabaseAdmin().from('instances').delete().eq('user_id', user.id)
+  const { error: insertError } = await supabaseAdmin().from('instances').insert({
     user_id: user.id,
     instance_name: instanceName,
     status: alreadyConnected ? 'connected' : 'disconnected',
     active: true,
     paused: false,
     persona_name: 'MAIA',
-  }, { onConflict: 'user_id' })
+  })
 
-  if (upsertError) console.log('[whatsapp POST] upsert error:', upsertError.message)
+  if (insertError) console.log('[whatsapp POST] insert error:', insertError.message)
 
   if (alreadyConnected) {
     const phone = state?.instance?.wuid?.replace('@s.whatsapp.net', '') || null
-    return NextResponse.json({ instance: instanceName, connected: true, phone, upsertError: upsertError?.message })
+    return NextResponse.json({ instance: instanceName, connected: true, phone })
   }
 
-  return NextResponse.json({ instance: instanceName, qrcode, upsertError: upsertError?.message })
+  return NextResponse.json({ instance: instanceName, qrcode })
 }
 
 // DELETE — desconectar
