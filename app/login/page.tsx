@@ -10,7 +10,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [senhaConfirm, setSenhaConfirm] = useState('')
-  const [modo, setModo] = useState<'login' | 'cadastro'>('login')
+  const [modo, setModo] = useState<'login' | 'cadastro' | 'recuperar'>('login')
   const [loading, setLoading] = useState(false)
   const [mensagem, setMensagem] = useState('')
   const [erro, setErro] = useState('')
@@ -39,6 +39,19 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signUp({ email, password: senha })
     if (error) { setErro(error.message); setLoading(false); return }
     setMensagem('Conta criada! Verifique seu email para confirmar o cadastro.')
+    setLoading(false)
+  }
+
+  async function handleRecuperar(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setErro('')
+    const supabase = getSupabase()
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
+    if (error) { setErro(error.message); setLoading(false); return }
+    setMensagem('Enviamos um link de recuperação para o seu email.')
     setLoading(false)
   }
 
@@ -115,6 +128,14 @@ export default function LoginPage() {
                 onFocus={e => e.target.style.borderColor = PRIMARY}
                 onBlur={e => e.target.style.borderColor = ''}
               />
+              <button
+                type="button"
+                onClick={() => { setModo('recuperar'); setErro('') }}
+                className="mt-1 text-xs hover:underline float-right"
+                style={{ color: PRIMARY }}
+              >
+                Esqueci minha senha
+              </button>
             </div>
             {erro && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">{erro}</p>}
             <button
@@ -123,6 +144,35 @@ export default function LoginPage() {
               style={{ backgroundColor: PRIMARY }}
             >
               {loading ? 'Entrando…' : 'Entrar'}
+            </button>
+          </form>
+        ) : modo === 'recuperar' ? (
+          <form onSubmit={handleRecuperar} className="space-y-4">
+            <p className="text-sm text-gray-500 -mt-3 mb-2">Digite seu email e enviamos um link para redefinir a senha.</p>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+              <input
+                type="email" value={email} onChange={e => setEmail(e.target.value)}
+                required autoFocus
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none transition-colors"
+                onFocus={e => e.target.style.borderColor = PRIMARY}
+                onBlur={e => e.target.style.borderColor = ''}
+              />
+            </div>
+            {erro && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">{erro}</p>}
+            <button
+              type="submit" disabled={loading}
+              className="w-full text-white text-sm font-medium rounded-xl py-2.5 disabled:opacity-50 transition-colors"
+              style={{ backgroundColor: PRIMARY }}
+            >
+              {loading ? 'Enviando…' : 'Enviar link de recuperação'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setModo('login'); setErro('') }}
+              className="w-full text-xs text-gray-500 hover:underline"
+            >
+              Voltar ao login
             </button>
           </form>
         ) : (
@@ -192,11 +242,11 @@ export default function LoginPage() {
             <button onClick={() => { setModo('cadastro'); setErro('') }} className="text-xs text-gray-500 hover:underline">
               Não tem conta? <span style={{ color: PRIMARY }}>Criar conta</span>
             </button>
-          ) : (
+          ) : modo === 'cadastro' ? (
             <button onClick={() => { setModo('login'); setErro('') }} className="text-xs text-gray-500 hover:underline">
               Já tem conta? <span style={{ color: PRIMARY }}>Entrar</span>
             </button>
-          )}
+          ) : null}
         </div>
 
         <div className="mt-8 flex justify-center">
