@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 const EVO_URL = 'https://evolution.saacs.com.br'
-const EVO_KEY = 'CA03A237-2DCC-4684-8989-0E615AE6220B'
+const EVO_KEY_GLOBAL = '429683C4C977415CAAFCCE10F7D57E11'
+const EVO_KEY_INSTANCE = 'CA03A237-2DCC-4684-8989-0E615AE6220B'
 
 async function getUser(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '')
@@ -15,10 +16,10 @@ async function getUser(req: NextRequest) {
   return user
 }
 
-async function evo(method: string, path: string, body?: object) {
+async function evo(method: string, path: string, body?: object, useGlobalKey = false) {
   const res = await fetch(`${EVO_URL}${path}`, {
     method,
-    headers: { apikey: EVO_KEY, 'Content-Type': 'application/json' },
+    headers: { apikey: useGlobalKey ? EVO_KEY_GLOBAL : EVO_KEY_INSTANCE, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
   })
   return res.json()
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
     instanceName,
     integration: 'WHATSAPP-BAILEYS',
     qrcode: true,
-  })
+  }, true)
 
   if (created?.error) return NextResponse.json({ error: created.error }, { status: 400 })
 
