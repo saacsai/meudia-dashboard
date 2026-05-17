@@ -27,7 +27,18 @@ export default function CompletePerfil() {
     setLoading(true)
     setErro('')
     const supabase = getSupabase()
-    const { error } = await supabase.auth.updateUser({ data: { whatsapp: clean } })
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { setErro('Sessão expirada.'); setLoading(false); return }
+
+    // Salva no auth metadata
+    await supabase.auth.updateUser({ data: { whatsapp: clean } })
+
+    // Salva na tabela users (upsert garante que funciona para novos e existentes)
+    const { error } = await supabase
+      .from('users')
+      .update({ whatsapp: clean, full_name: nome, updated_at: new Date().toISOString() })
+      .eq('id', session.user.id)
+
     if (error) { setErro(error.message); setLoading(false); return }
     window.location.href = '/dashboard'
   }
