@@ -55,12 +55,28 @@ function splitCSVLine(line: string): string[] {
   return result
 }
 
-// Normaliza qualquer formato de telefone para 55XXXXXXXXXXX
+// Normaliza qualquer formato de telefone BR para 55XXXXXXXXXXX
+// Trata: +55, 0XX (operadora), zero inicial, formatos com/sem dígito 9
 function normalizePhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, '')
   if (!digits || digits.length < 8) return null
-  if (digits.startsWith('55') && digits.length >= 12) return digits
-  if (digits.length >= 10) return '55' + digits
+
+  // Já tem DDI 55 correto (12 ou 13 dígitos)
+  if (digits.startsWith('55') && digits.length >= 12 && digits.length <= 13) return digits
+
+  let clean = digits
+
+  // Remove código de operadora brasileiro (0 + 2 dígitos de operadora)
+  // Ex: 01511964480411 (14d) → remove '015' → 11964480411 (11d)
+  // Ex: 01196448411   (11d) → remove '0'   → 1196448411  (10d)
+  if (clean.startsWith('0') && !clean.startsWith('00')) {
+    if (clean.length >= 13) clean = clean.slice(3)       // 0CC + DDD + número
+    else if (clean.length >= 11) clean = clean.slice(1)  // 0 + DDD + número
+  }
+
+  // Deve ter 10 ou 11 dígitos (DDD + número)
+  if (clean.length === 10 || clean.length === 11) return '55' + clean
+
   return null
 }
 
