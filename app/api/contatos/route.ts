@@ -42,13 +42,13 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data ?? [])
 }
 
-// PATCH — atualiza prioridade de um contato
+// PATCH — atualiza um contato (id) ou vários em bulk (ids[])
 export async function PATCH(req: NextRequest) {
   const user = await getAuthUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { id, priority, name } = await req.json()
-  if (!id || (!priority && name === undefined)) return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 })
+  const body = await req.json()
+  const { id, ids, priority, name } = body
 
   const { data: rows } = await supabaseAdmin()
     .from('instances')
@@ -59,6 +59,21 @@ export async function PATCH(req: NextRequest) {
 
   const inst = rows?.[0] ?? null
   if (!inst) return NextResponse.json({ error: 'Instância não encontrada' }, { status: 404 })
+
+  // Bulk update (ids[])
+  if (ids && Array.isArray(ids) && priority) {
+    const { error } = await supabaseAdmin()
+      .from('contacts')
+      .update({ priority, classified_manually: true })
+      .in('id', ids)
+      .eq('instance_id', inst.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, updated: ids.length })
+  }
+
+  // Single update
+  if (!id || (!priority && name === undefined))
+    return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 })
 
   const update: Record<string, unknown> = {}
   if (priority) { update.priority = priority; update.classified_manually = true }

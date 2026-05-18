@@ -50,6 +50,9 @@ export default function ContatosPage() {
   const [saving, setSaving] = useState<string | null>(null)
   const [editingName, setEditingName] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkPriority, setBulkPriority] = useState('normal')
+  const [bulkSaving, setBulkSaving] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<{ total: number; priority: number; normal: number; muted: number } | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -106,6 +109,41 @@ export default function ContatosPage() {
       setSyncError(data.error + (data.debug ? ` | ${JSON.stringify(data.debug)}` : ''))
     }
     setSyncing(false)
+  }
+
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    if (selected.size === filtered.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(filtered.map(c => c.id)))
+    }
+  }
+
+  async function applyBulk() {
+    if (!selected.size) return
+    setBulkSaving(true)
+    const token = await getToken()
+    const res = await fetch('/api/contatos', {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: Array.from(selected), priority: bulkPriority }),
+    })
+    const data = await res.json()
+    if (data.ok) {
+      setContacts(prev => prev.map(c =>
+        selected.has(c.id) ? { ...c, priority: bulkPriority, classified_manually: true } : c
+      ))
+      setSelected(new Set())
+    }
+    setBulkSaving(false)
   }
 
   async function saveName(contactId: string, name: string) {
@@ -195,6 +233,39 @@ export default function ContatosPage() {
         )}
       </div>
 
+      {/* Barra de ação bulk — aparece quando há selecionados */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 bg-teal-50 border border-teal-200 rounded-xl px-4 py-3">
+          <span className="text-sm font-medium text-teal-800 flex-shrink-0">
+            {selected.size} selecionado{selected.size > 1 ? 's' : ''}
+          </span>
+          <select
+            value={bulkPriority}
+            onChange={e => setBulkPriority(e.target.value)}
+            className="border border-teal-300 rounded-lg px-2 py-1.5 text-xs font-medium outline-none bg-white"
+            style={{ color: PRIORITY_COLOR[bulkPriority] }}
+          >
+            <option value="priority">Prioridade</option>
+            <option value="normal">Normal</option>
+            <option value="muted">Silenciado</option>
+          </select>
+          <button
+            onClick={applyBulk}
+            disabled={bulkSaving}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-60 transition-colors"
+            style={{ backgroundColor: PRIMARY }}
+          >
+            {bulkSaving ? 'Salvando…' : 'Aplicar'}
+          </button>
+          <button
+            onClick={() => setSelected(new Set())}
+            className="ml-auto text-xs text-teal-600 hover:text-teal-800 transition-colors"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
+
       {/* Filtros por prioridade */}
       <div className="flex gap-2 flex-wrap">
         {(['all', 'priority', 'normal', 'muted'] as const).map(f => (
@@ -235,13 +306,40 @@ export default function ContatosPage() {
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100">
+          {/* Cabeçalho com "selecionar todos" */}
+          <div className="flex items-center gap-4 px-5 py-2.5 bg-gray-50 rounded-t-2xl">
+            <input
+              type="checkbox"
+              checked={filtered.length > 0 && selected.size === filtered.length}
+              ref={el => { if (el) el.indeterminate = selected.size > 0 && selected.size < filtered.length }}
+              onChange={toggleSelectAll}
+              className="w-4 h-4 rounded accent-teal-700 flex-shrink-0"
+            />
+            <span className="text-xs text-gray-400">
+              {selected.size > 0 ? `${selected.size} de ${filtered.length} selecionados` : `${filtered.length} contatos`}
+            </span>
+          </div>
+
           {filtered.map(contact => {
             const displayName = contact.name || formatJid(contact.remote_jid)
             const initials = displayName[0].toUpperCase()
             const color = PRIORITY_COLOR[contact.priority] || '#9ca3af'
+            const isSelected = selected.has(contact.id)
 
             return (
-              <div key={contact.id} className="flex items-center gap-4 px-5 py-4">
+              <div
+                key={contact.id}
+                className="flex items-center gap-4 px-5 py-4 transition-colors"
+                style={isSelected ? { backgroundColor: '#f0fdfa' } : {}}
+              >
+                {/* Checkbox */}
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => toggleSelect(contact.id)}
+                  className="w-4 h-4 rounded accent-teal-700 flex-shrink-0"
+                />
+
                 {/* Avatar */}
                 <div
                   className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
