@@ -41,6 +41,7 @@ export default function ContatosPage() {
   const [saving, setSaving] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<{ total: number; priority: number; normal: number; muted: number } | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   const loadData = useCallback(async () => {
     const token = await getToken()
@@ -57,6 +58,7 @@ export default function ContatosPage() {
   async function syncContacts() {
     setSyncing(true)
     setSyncResult(null)
+    setSyncError(null)
     const token = await getToken()
     const res = await fetch('/api/contatos/sync', {
       method: 'POST',
@@ -66,6 +68,8 @@ export default function ContatosPage() {
     if (data.ok) {
       setSyncResult(data)
       await loadData()
+    } else {
+      setSyncError(data.error + (data.debug ? ` | ${JSON.stringify(data.debug)}` : ''))
     }
     setSyncing(false)
   }
@@ -122,6 +126,9 @@ export default function ContatosPage() {
           <p className="text-xs text-gray-500">
             {syncResult.total} importados — <span style={{ color: PRIMARY }}>{syncResult.priority} prioridade</span> · {syncResult.normal} normal · {syncResult.muted} silenciado
           </p>
+        )}
+        {syncError && (
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 max-w-md break-all">{syncError}</p>
         )}
       </div>
 

@@ -59,9 +59,11 @@ export async function POST(req: NextRequest) {
   const inst = rows?.[0] ?? null
   if (!inst) return NextResponse.json({ error: 'Nenhuma instância ativa' }, { status: 404 })
 
-  // Busca todos os chats da Evolution API
+  // Busca todos os chats da Evolution API (v2 usa POST)
   const res = await fetch(`${EVO_URL}/chat/findChats/${inst.instance_name}`, {
-    headers: { apikey: EVO_KEY },
+    method: 'POST',
+    headers: { apikey: EVO_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
   })
 
   if (!res.ok) {
