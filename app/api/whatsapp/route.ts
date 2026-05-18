@@ -58,8 +58,8 @@ export async function GET(req: NextRequest) {
       .replace('@s.whatsapp.net', '') || inst.phone_number || null
 
     if (!phone) {
-      // Tenta buscar o número via fetchInstances
       const info = await evo('GET', `/instance/fetchInstances`)
+      console.log('[fetchInstances sample]', JSON.stringify(info?.[0]).substring(0, 300))
       const found = Array.isArray(info)
         ? info.find((i: { instance?: { instanceName?: string } }) => i.instance?.instanceName === inst.instance_name)
         : null

@@ -18,6 +18,11 @@ function IconBack() {
   )
 }
 
+const inputClass = (readOnly: boolean) =>
+  `w-full border rounded-lg px-3 py-2 text-sm outline-none transition-colors ${
+    readOnly ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed' : 'border-gray-300'
+  }`
+
 export default function EditarPerfilPage({ onVoltar, onSaved }: Props) {
   const [form, setForm] = useState({ full_name: '', whatsapp: '', email: '' })
   const [loading, setLoading] = useState(true)
@@ -59,23 +64,6 @@ export default function EditarPerfilPage({ onVoltar, onSaved }: Props) {
     setSaving(false)
   }
 
-  const Field = ({ label, field, readOnly = false }: { label: string; field: keyof typeof form; readOnly?: boolean }) => (
-    <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-      <input
-        type="text"
-        value={form[field]}
-        readOnly={readOnly}
-        onChange={e => setForm(f => ({ ...f, [field]: e.target.value }))}
-        className={`w-full border rounded-lg px-3 py-2 text-sm outline-none transition-colors ${
-          readOnly ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed' : 'border-gray-300'
-        }`}
-        onFocus={readOnly ? undefined : e => (e.target.style.borderColor = PRIMARY)}
-        onBlur={readOnly ? undefined : e => (e.target.style.borderColor = '')}
-      />
-    </div>
-  )
-
   return (
     <div className="max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-8">
@@ -90,9 +78,37 @@ export default function EditarPerfilPage({ onVoltar, onSaved }: Props) {
         <div className="text-sm text-gray-400">Carregando...</div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
-          <Field label="Nome completo" field="full_name" />
-          <Field label="E-mail" field="email" readOnly />
-          <Field label="WhatsApp pessoal" field="whatsapp" />
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nome completo</label>
+            <input
+              type="text"
+              value={form.full_name}
+              onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
+              className={inputClass(false)}
+              onFocus={e => (e.target.style.borderColor = PRIMARY)}
+              onBlur={e => (e.target.style.borderColor = '')}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">E-mail</label>
+            <input
+              type="text"
+              value={form.email}
+              readOnly
+              className={inputClass(true)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">WhatsApp pessoal</label>
+            <input
+              type="text"
+              value={form.whatsapp}
+              onChange={e => setForm(f => ({ ...f, whatsapp: e.target.value }))}
+              className={inputClass(false)}
+              onFocus={e => (e.target.style.borderColor = PRIMARY)}
+              onBlur={e => (e.target.style.borderColor = '')}
+            />
+          </div>
 
           {erro && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{erro}</p>}
           {sucesso && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg p-3">✓ Perfil atualizado com sucesso.</p>}
