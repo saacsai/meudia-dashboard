@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 const EVO_URL = 'https://evolution.saacs.com.br'
 const EVO_KEY = '28bad1a004a318d3f7ba983f466b7168'
+const N8N_WEBHOOK = 'http://n8n_webhook:5678/webhook/chama_seu_dia'
 
 async function getUser(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '')
@@ -110,6 +111,25 @@ export async function POST(req: NextRequest) {
     const qr = await evo('GET', `/instance/connect/${instanceName}`)
     qrcode = qr?.qrcode?.base64 || qr?.base64 || null
   }
+
+  // Configura webhook → n8n, rejeitar chamadas e UPSERT
+  await Promise.all([
+    evo('POST', `/webhook/set/${instanceName}`, {
+      url: N8N_WEBHOOK,
+      webhook_by_events: false,
+      webhook_base64: true,
+      events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE'],
+    }),
+    evo('POST', `/settings/set/${instanceName}`, {
+      rejectCall: true,
+      msgCall: 'No momento não estou disponível para chamadas de voz.',
+      groupsIgnore: false,
+      alwaysOnline: false,
+      readMessages: false,
+      readStatus: false,
+      syncFullHistory: false,
+    }),
+  ])
 
   // Limpa qualquer linha existente para este user e insere nova
   await supabaseAdmin().from('instances').delete().eq('user_id', user.id)
