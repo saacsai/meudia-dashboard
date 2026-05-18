@@ -79,6 +79,40 @@ async function evoPost(path: string) {
   return res.json()
 }
 
+// GET — debug: mostra estrutura bruta da Evolution API
+export async function GET(req: NextRequest) {
+  const user = await getAuthUser(req)
+  if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  const { data: rows } = await supabaseAdmin()
+    .from('instances')
+    .select('id, instance_name')
+    .eq('user_id', user.id)
+    .eq('active', true)
+    .limit(1)
+
+  const inst = rows?.[0] ?? null
+  if (!inst) return NextResponse.json({ error: 'Sem instância' }, { status: 404 })
+
+  const [chatsRaw, contactsRaw] = await Promise.all([
+    evoPost(`/chat/findChats/${inst.instance_name}`),
+    evoPost(`/contact/findContacts/${inst.instance_name}`),
+  ])
+
+  const chats = extractRaw(chatsRaw)
+  const contacts = extractRaw(contactsRaw)
+
+  return NextResponse.json({
+    instance: inst.instance_name,
+    chats_total: chats.length,
+    chats_sample: chats.slice(0, 2),
+    contacts_total: contacts.length,
+    contacts_sample: contacts.slice(0, 2),
+    chats_raw_type: typeof chatsRaw,
+    chats_raw_keys: chatsRaw && typeof chatsRaw === 'object' ? Object.keys(chatsRaw as object) : null,
+  })
+}
+
 // POST — sincroniza contatos do Evolution API → Supabase
 export async function POST(req: NextRequest) {
   const user = await getAuthUser(req)
