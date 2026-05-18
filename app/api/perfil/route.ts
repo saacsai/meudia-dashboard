@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+function normalizePhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return ''
+  if (digits.startsWith('55') && digits.length >= 12) return digits
+  return '55' + digits
+}
+
 async function getAuthUser(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '')
   if (!token) return null
@@ -42,7 +49,7 @@ export async function PATCH(req: NextRequest) {
       id: user.id,
       email: user.email ?? '',
       full_name,
-      whatsapp,
+      whatsapp: normalizePhone(whatsapp || ''),
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id' })
 

@@ -20,6 +20,13 @@ function supabaseAdmin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, key)
 }
 
+function normalizePhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return ''
+  if (digits.startsWith('55') && digits.length >= 12) return digits
+  return '55' + digits
+}
+
 async function evo(method: string, path: string, body?: object) {
   const res = await fetch(`${EVO_URL}${path}`, {
     method,
@@ -54,23 +61,17 @@ export async function GET(req: NextRequest) {
   const connected = stateValue === 'open' || stateValue === 'authenticated' || stateValue === 'connected'
 
   if (connected) {
-    let phone = (state?.instance?.wuid || state?.instance?.ownerJid || '')
-      .replace('@s.whatsapp.net', '') || inst.phone_number || null
-
-    if (!phone) {
-      const info = await evo('GET', `/instance/fetchInstances`)
-      console.log('[fetchInstances sample]', JSON.stringify(info?.[0]).substring(0, 300))
-      const found = Array.isArray(info)
-        ? info.find((i: { instance?: { instanceName?: string } }) => i.instance?.instanceName === inst.instance_name)
-        : null
-      phone = found?.instance?.ownerJid?.replace('@s.whatsapp.net', '') ||
-              found?.instance?.wuid?.replace('@s.whatsapp.net', '') || null
+    // Se não tem phone salvo, tenta puxar de users.whatsapp
+    if (!inst.phone_number) {
+      const { data: userData } = await supabaseAdmin()
+        .from('users').select('whatsapp').eq('id', user.id).single()
+      const phone = userData?.whatsapp ? normalizePhone(userData.whatsapp) : null
+      if (phone) {
+        await supabaseAdmin().from('instances').update({ phone_number: phone }).eq('instance_name', inst.instance_name)
+        return NextResponse.json({ connected: true, phone, instance: inst.instance_name })
+      }
     }
-
-    if (phone && !inst.phone_number) {
-      await supabaseAdmin().from('instances').update({ phone_number: phone }).eq('instance_name', inst.instance_name)
-    }
-    return NextResponse.json({ connected: true, phone, instance: inst.instance_name })
+    return NextResponse.json({ connected: true, phone: inst.phone_number, instance: inst.instance_name })
   }
 
   const qr = await evo('GET', `/instance/connect/${inst.instance_name}`)
@@ -122,12 +123,15 @@ export async function POST(req: NextRequest) {
 
   if (insertError) console.log('[whatsapp POST] insert error:', insertError.message)
 
+  // Puxar phone de users.whatsapp e salvar em instances
+  const { data: userData } = await supabaseAdmin()
+    .from('users').select('whatsapp').eq('id', user.id).single()
+  const phone = userData?.whatsapp ? normalizePhone(userData.whatsapp) : null
+  if (phone) {
+    await supabaseAdmin().from('instances').update({ phone_number: phone }).eq('instance_name', instanceName)
+  }
+
   if (alreadyConnected) {
-    const phone = (state?.instance?.wuid || state?.instance?.ownerJid || '')
-      .replace('@s.whatsapp.net', '') || null
-    if (phone) {
-      await supabaseAdmin().from('instances').update({ phone_number: phone }).eq('instance_name', instanceName)
-    }
     return NextResponse.json({ instance: instanceName, connected: true, phone })
   }
 
