@@ -20,9 +20,16 @@ function supabaseAdmin() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, key)
 }
 
-function calcScore(lastMsgTimestamp: number | null, unreadCount: number, msgCount30d: number): number {
+// Normaliza timestamp: aceita segundos ou milissegundos, retorna segundos
+function normalizeTs(ts: unknown): number | null {
+  if (!ts || typeof ts !== 'number') return null
+  // Se > 1e10, está em milissegundos
+  return ts > 1e10 ? Math.floor(ts / 1000) : ts
+}
+
+function calcScore(lastTsSec: number | null, unreadCount: number, msgCount30d: number): number {
   const now = Math.floor(Date.now() / 1000)
-  const daysSince = lastMsgTimestamp ? (now - lastMsgTimestamp) / 86400 : 9999
+  const daysSince = lastTsSec ? (now - lastTsSec) / 86400 : 9999
 
   let recency: number
   if (daysSince < 1) recency = 50
@@ -43,12 +50,40 @@ function calcPriority(score: number): string {
   return 'muted'
 }
 
+function extractRaw(raw: unknown): Record<string, unknown>[] {
+  if (Array.isArray(raw)) return raw as Record<string, unknown>[]
+  if (raw && typeof raw === 'object') {
+    const r = raw as Record<string, unknown>
+    if (Array.isArray(r.chats)) return r.chats as Record<string, unknown>[]
+    if (Array.isArray(r.data)) return r.data as Record<string, unknown>[]
+    if (Array.isArray(r.contacts)) return r.contacts as Record<string, unknown>[]
+  }
+  return []
+}
+
+function getId(c: Record<string, unknown>): string {
+  return (c.remoteJid as string) || (c.id as string) || ''
+}
+
+function getName(c: Record<string, unknown>): string | null {
+  return (c.name as string) || (c.pushName as string) || (c.verifiedName as string) || null
+}
+
+async function evoPost(path: string) {
+  const res = await fetch(`${EVO_URL}${path}`, {
+    method: 'POST',
+    headers: { apikey: EVO_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  })
+  if (!res.ok) return null
+  return res.json()
+}
+
 // POST — sincroniza contatos do Evolution API → Supabase
 export async function POST(req: NextRequest) {
   const user = await getAuthUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  // Busca instância ativa
   const { data: rows } = await supabaseAdmin()
     .from('instances')
     .select('id, instance_name')
@@ -59,60 +94,55 @@ export async function POST(req: NextRequest) {
   const inst = rows?.[0] ?? null
   if (!inst) return NextResponse.json({ error: 'Nenhuma instância ativa' }, { status: 404 })
 
-  // Busca todos os chats da Evolution API (v2 usa POST)
-  const res = await fetch(`${EVO_URL}/chat/findChats/${inst.instance_name}`, {
-    method: 'POST',
-    headers: { apikey: EVO_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
-  })
+  // Busca chats e contatos em paralelo
+  const [chatsRaw, contactsRaw] = await Promise.all([
+    evoPost(`/chat/findChats/${inst.instance_name}`),
+    evoPost(`/contact/findContacts/${inst.instance_name}`),
+  ])
 
-  if (!res.ok) {
-    return NextResponse.json({ error: `Evolution API: ${res.status}` }, { status: 500 })
-  }
-
-  const raw = await res.json()
-
-  // Evolution API pode retornar array direto, { chats: [] } ou outro wrapper
-  const chats: Record<string, unknown>[] = Array.isArray(raw)
-    ? raw
-    : Array.isArray(raw?.chats)
-      ? raw.chats
-      : Array.isArray(raw?.data)
-        ? raw.data
-        : []
+  const chats = extractRaw(chatsRaw)
+  const contacts = extractRaw(contactsRaw)
 
   if (chats.length === 0) {
     return NextResponse.json({
       error: 'Evolution API não retornou chats',
-      debug: { type: typeof raw, keys: raw && typeof raw === 'object' ? Object.keys(raw) : null, sample: JSON.stringify(raw).slice(0, 300) },
+      debug: {
+        chatsType: typeof chatsRaw,
+        chatsKeys: chatsRaw && typeof chatsRaw === 'object' ? Object.keys(chatsRaw as object) : null,
+        chatsSample: JSON.stringify(chatsRaw).slice(0, 400),
+        contactsCount: contacts.length,
+      },
     }, { status: 500 })
   }
 
-  // Campo de ID: pode ser "id" ou "remoteJid"
-  const getId = (c: Record<string, unknown>): string =>
-    (c.remoteJid as string) || (c.id as string) || ''
-
-  // Filtra apenas contatos individuais (ignora grupos @g.us e status)
-  const individual = chats.filter(c => {
+  // Mapa JID → nome a partir de findContacts (mais confiável para nomes)
+  const nameMap = new Map<string, string>()
+  for (const c of contacts) {
     const jid = getId(c)
-    return jid.endsWith('@s.whatsapp.net')
-  })
+    const name = getName(c)
+    if (jid && name) nameMap.set(jid, name)
+  }
 
-  // Busca contatos já classificados manualmente para não sobrescrever
+  // Filtra apenas individuais
+  const individual = chats.filter(c => getId(c).endsWith('@s.whatsapp.net'))
+
+  // Contatos classificados manualmente — não sobrescrever priority
   const { data: existingManual } = await supabaseAdmin()
     .from('contacts')
     .select('remote_jid')
     .eq('instance_id', inst.id)
     .eq('classified_manually', true)
 
-  const manualJids = new Set((existingManual || []).map((c: { remote_jid: string }) => c.remote_jid as string))
+  const manualJids = new Set((existingManual || []).map((c: { remote_jid: string }) => c.remote_jid))
 
-  // Monta os upserts
   const upserts = individual.map((chat) => {
     const jid = getId(chat)
-    const name = (chat.name || chat.pushName || chat.verifiedName || null) as string | null
-    const lastMsg = chat.lastMessage as { messageTimestamp?: number } | null
-    const lastTs = lastMsg?.messageTimestamp ?? null
+    // Prefere nome do findContacts, fallback para findChats
+    const name = nameMap.get(jid) || getName(chat)
+
+    const lastMsg = chat.lastMessage as Record<string, unknown> | null
+    const rawTs = lastMsg?.messageTimestamp ?? chat.updatedAt ?? chat.lastMessageTimestamp
+    const lastTs = normalizeTs(rawTs)
     const unread = (chat.unreadCount as number) ?? 0
     const score = calcScore(lastTs, unread, 0)
     const isManual = manualJids.has(jid)
@@ -128,7 +158,7 @@ export async function POST(req: NextRequest) {
     }
   })
 
-  // Upsert em lotes de 200 para não sobrecarregar
+  // Upsert em lotes de 200
   const BATCH = 200
   let inserted = 0
   for (let i = 0; i < upserts.length; i += BATCH) {
@@ -139,7 +169,6 @@ export async function POST(req: NextRequest) {
     inserted += batch.length
   }
 
-  // Contagem por prioridade
   const counts = upserts.reduce((acc, c) => {
     const p = (c as { priority?: string }).priority || 'manual'
     acc[p] = (acc[p] || 0) + 1
@@ -153,5 +182,6 @@ export async function POST(req: NextRequest) {
     normal: counts.normal || 0,
     muted: counts.muted || 0,
     manual_preserved: manualJids.size,
+    contacts_with_name: upserts.filter(u => u.name).length,
   })
 }
