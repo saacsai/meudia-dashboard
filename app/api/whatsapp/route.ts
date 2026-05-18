@@ -23,8 +23,9 @@ function supabaseAdmin() {
 function normalizePhone(raw: string): string {
   const digits = raw.replace(/\D/g, '')
   if (!digits) return ''
-  if (digits.startsWith('55') && digits.length >= 12) return digits
-  return '55' + digits
+  if (digits.length >= 12) return digits  // já tem DDI
+  if (digits.length >= 10) return '55' + digits  // número BR sem DDI
+  return digits
 }
 
 async function evo(method: string, path: string, body?: object) {
