@@ -125,11 +125,12 @@ export async function POST(req: NextRequest) {
   const inst = instRows?.[0] ?? null
   if (!inst) return NextResponse.json({ error: 'Nenhuma instância ativa' }, { status: 404 })
 
-  // Busca todos os contatos da instância
+  // Busca contatos não bloqueados (name_locked = false ou null)
   const { data: contacts } = await supabaseAdmin()
     .from('contacts')
     .select('id, remote_jid, name')
     .eq('instance_id', inst.id)
+    .or('name_locked.is.null,name_locked.eq.false')
 
   if (!contacts || contacts.length === 0) {
     return NextResponse.json({ error: 'Nenhum contato para atualizar. Sincronize primeiro.' }, { status: 400 })

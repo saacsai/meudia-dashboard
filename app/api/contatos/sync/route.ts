@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
   // Filtra apenas individuais
   const individual = chats.filter(c => getId(c).endsWith('@s.whatsapp.net'))
 
-  // Contatos classificados manualmente — não sobrescrever priority
+  // Contatos com priority manual — não sobrescrever
   const { data: existingManual } = await supabaseAdmin()
     .from('contacts')
     .select('remote_jid')
@@ -170,6 +170,15 @@ export async function POST(req: NextRequest) {
     .eq('classified_manually', true)
 
   const manualJids = new Set((existingManual || []).map((c: { remote_jid: string }) => c.remote_jid))
+
+  // Contatos com nome bloqueado — não sobrescrever
+  const { data: lockedNames } = await supabaseAdmin()
+    .from('contacts')
+    .select('remote_jid')
+    .eq('instance_id', inst.id)
+    .eq('name_locked', true)
+
+  const lockedJids = new Set((lockedNames || []).map((c: { remote_jid: string }) => c.remote_jid))
 
   const upserts = individual.map((chat) => {
     const jid = getId(chat)
@@ -186,7 +195,8 @@ export async function POST(req: NextRequest) {
     return {
       instance_id: inst.id,
       remote_jid: jid,
-      name,
+      // Não sobrescreve nome se foi editado manualmente
+      ...(!lockedJids.has(jid) ? { name } : {}),
       auto_score: score,
       msg_count_30d: 0,
       last_interaction: lastTs ? new Date(lastTs * 1000).toISOString() : null,

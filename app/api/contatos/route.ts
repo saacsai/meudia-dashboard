@@ -62,7 +62,7 @@ export async function PATCH(req: NextRequest) {
 
   const update: Record<string, unknown> = {}
   if (priority) { update.priority = priority; update.classified_manually = true }
-  if (name !== undefined) update.name = name
+  if (name !== undefined) { update.name = name; update.name_locked = true }
 
   const { data, error } = await supabaseAdmin()
     .from('contacts')
