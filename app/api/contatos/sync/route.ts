@@ -68,15 +68,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Evolution API: ${res.status}` }, { status: 500 })
   }
 
-  const chats = await res.json()
-  if (!Array.isArray(chats)) {
-    return NextResponse.json({ error: 'Resposta inesperada da Evolution API' }, { status: 500 })
+  const raw = await res.json()
+
+  // Evolution API pode retornar array direto, { chats: [] } ou outro wrapper
+  const chats: Record<string, unknown>[] = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw?.chats)
+      ? raw.chats
+      : Array.isArray(raw?.data)
+        ? raw.data
+        : []
+
+  if (chats.length === 0) {
+    return NextResponse.json({
+      error: 'Evolution API não retornou chats',
+      debug: { type: typeof raw, keys: raw && typeof raw === 'object' ? Object.keys(raw) : null, sample: JSON.stringify(raw).slice(0, 300) },
+    }, { status: 500 })
   }
 
+  // Campo de ID: pode ser "id" ou "remoteJid"
+  const getId = (c: Record<string, unknown>): string =>
+    (c.remoteJid as string) || (c.id as string) || ''
+
   // Filtra apenas contatos individuais (ignora grupos @g.us e status)
-  const individual = chats.filter((c: { id: string }) =>
-    c.id && c.id.endsWith('@s.whatsapp.net')
-  )
+  const individual = chats.filter(c => {
+    const jid = getId(c)
+    return jid.endsWith('@s.whatsapp.net')
+  })
 
   // Busca contatos já classificados manualmente para não sobrescrever
   const { data: existingManual } = await supabaseAdmin()
@@ -85,28 +103,25 @@ export async function POST(req: NextRequest) {
     .eq('instance_id', inst.id)
     .eq('classified_manually', true)
 
-  const manualJids = new Set((existingManual || []).map((c: { remote_jid: string }) => c.remote_jid))
+  const manualJids = new Set((existingManual || []).map((c: { remote_jid: string }) => c.remote_jid as string))
 
   // Monta os upserts
-  const upserts = individual.map((chat: {
-    id: string
-    name?: string
-    unreadCount?: number
-    lastMessage?: { messageTimestamp?: number }
-  }) => {
-    const lastTs = chat.lastMessage?.messageTimestamp ?? null
-    const unread = chat.unreadCount ?? 0
+  const upserts = individual.map((chat) => {
+    const jid = getId(chat)
+    const name = (chat.name || chat.pushName || chat.verifiedName || null) as string | null
+    const lastMsg = chat.lastMessage as { messageTimestamp?: number } | null
+    const lastTs = lastMsg?.messageTimestamp ?? null
+    const unread = (chat.unreadCount as number) ?? 0
     const score = calcScore(lastTs, unread, 0)
-    const isManual = manualJids.has(chat.id)
+    const isManual = manualJids.has(jid)
 
     return {
       instance_id: inst.id,
-      remote_jid: chat.id,
-      name: chat.name || null,
+      remote_jid: jid,
+      name,
       auto_score: score,
       msg_count_30d: 0,
       last_interaction: lastTs ? new Date(lastTs * 1000).toISOString() : null,
-      // Só atualiza priority se não foi classificado manualmente
       ...(isManual ? {} : { priority: calcPriority(score) }),
     }
   })
