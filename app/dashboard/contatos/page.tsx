@@ -51,6 +51,8 @@ export default function ContatosPage() {
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<{ total: number; priority: number; normal: number; muted: number } | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ updated: number; csv_rows: number; not_matched: number } | null>(null)
 
   const loadData = useCallback(async () => {
     const token = await getToken()
@@ -63,6 +65,27 @@ export default function ContatosPage() {
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
+
+  async function importCSV(file: File) {
+    setImporting(true)
+    setImportResult(null)
+    const token = await getToken()
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch('/api/contatos/import-csv', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    })
+    const data = await res.json()
+    if (data.ok) {
+      setImportResult(data)
+      await loadData()
+    } else {
+      setSyncError(data.error || 'Erro ao importar CSV')
+    }
+    setImporting(false)
+  }
 
   async function syncContacts() {
     setSyncing(true)
@@ -116,28 +139,43 @@ export default function ContatosPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-4">
 
-      {/* Barra superior: filtros + sync */}
-      <div className="flex items-center justify-between gap-3">
+      {/* Barra superior: sync + import CSV */}
+      <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={syncContacts}
-          disabled={syncing}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-60 transition-colors flex-shrink-0"
+          disabled={syncing || importing}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-60 transition-colors"
           style={{ backgroundColor: PRIMARY }}
         >
           {syncing ? (
-            <>
-              <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
-              Sincronizando…
-            </>
+            <><span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />Sincronizando…</>
           ) : 'Sincronizar contatos'}
         </button>
+
+        <label className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-gray-300 bg-white cursor-pointer transition-colors hover:bg-gray-50 ${importing ? 'opacity-60 pointer-events-none' : ''}`}>
+          <input
+            type="file"
+            accept=".csv"
+            className="hidden"
+            onChange={e => { if (e.target.files?.[0]) importCSV(e.target.files[0]) }}
+          />
+          {importing ? (
+            <><span className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin inline-block" />Importando…</>
+          ) : 'Importar Google Contatos (.csv)'}
+        </label>
+
         {syncResult && (
-          <p className="text-xs text-gray-500">
-            {syncResult.total} importados — <span style={{ color: PRIMARY }}>{syncResult.priority} prioridade</span> · {syncResult.normal} normal · {syncResult.muted} silenciado
+          <p className="text-xs text-gray-500 w-full">
+            Sync: {syncResult.total} contatos — <span style={{ color: PRIMARY }}>{syncResult.priority} prioridade</span> · {syncResult.normal} normal · {syncResult.muted} silenciado
+          </p>
+        )}
+        {importResult && (
+          <p className="text-xs text-gray-500 w-full">
+            CSV: <span style={{ color: PRIMARY }}>{importResult.updated} nomes atualizados</span> de {importResult.csv_rows} contatos ({importResult.not_matched} sem match)
           </p>
         )}
         {syncError && (
-          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 max-w-md break-all">{syncError}</p>
+          <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 w-full break-all">{syncError}</p>
         )}
       </div>
 
