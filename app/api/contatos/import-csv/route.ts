@@ -125,35 +125,41 @@ export async function POST(req: NextRequest) {
   const inst = instRows?.[0] ?? null
   if (!inst) return NextResponse.json({ error: 'Nenhuma instância ativa' }, { status: 404 })
 
-  // Busca contatos não bloqueados (name_locked = false ou null)
+  // Busca TODOS os contatos para matching de telefone
   const { data: contacts } = await supabaseAdmin()
     .from('contacts')
-    .select('id, remote_jid, name')
+    .select('id, remote_jid, name, name_locked')
     .eq('instance_id', inst.id)
-    .or('name_locked.is.null,name_locked.eq.false')
 
   if (!contacts || contacts.length === 0) {
     return NextResponse.json({ error: 'Nenhum contato para atualizar. Sincronize primeiro.' }, { status: 400 })
   }
 
-  // Mapa: número normalizado → id do contato
-  const jidMap = new Map<string, string>()
+  // Mapa: número → { id, locked } — inclui variações com/sem dígito 9
+  const jidMap = new Map<string, { id: string; locked: boolean }>()
   for (const c of contacts) {
     const digits = c.remote_jid.replace('@s.whatsapp.net', '')
-    jidMap.set(digits, c.id)
+    const entry = { id: c.id, locked: c.name_locked === true }
+    jidMap.set(digits, entry)
+    // Variação sem dígito 9 (fixos migrados): 5511 9 XXXX-XXXX ↔ 5511 XXXX-XXXX
+    if (digits.length === 13 && digits.slice(4, 5) === '9') {
+      jidMap.set(digits.slice(0, 4) + digits.slice(5), entry) // remove o 9
+    } else if (digits.length === 12) {
+      jidMap.set(digits.slice(0, 4) + '9' + digits.slice(4), entry) // adiciona o 9
+    }
   }
 
-  // Processa CSV e monta updates
+  // Processa CSV e monta updates (ignora name_locked)
   const updates: { id: string; name: string }[] = []
   for (const row of rows) {
     const name = extractName(row)
     if (!name) continue
     const phones = extractPhones(row)
     for (const phone of phones) {
-      const contactId = jidMap.get(phone)
-      if (contactId) {
-        updates.push({ id: contactId, name })
-        break // um match por contato do CSV é suficiente
+      const entry = jidMap.get(phone)
+      if (entry && !entry.locked) {
+        updates.push({ id: entry.id, name })
+        break
       }
     }
   }

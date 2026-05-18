@@ -195,8 +195,8 @@ export async function POST(req: NextRequest) {
     return {
       instance_id: inst.id,
       remote_jid: jid,
-      // Não sobrescreve nome se foi editado manualmente
-      ...(!lockedJids.has(jid) ? { name } : {}),
+      // Só atualiza nome se: não está bloqueado E o novo nome é não-nulo
+      ...(!lockedJids.has(jid) && name ? { name } : {}),
       auto_score: score,
       msg_count_30d: 0,
       last_interaction: lastTs ? new Date(lastTs * 1000).toISOString() : null,
