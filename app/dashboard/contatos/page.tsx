@@ -48,6 +48,8 @@ export default function ContatosPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'priority' | 'normal' | 'muted'>('all')
   const [saving, setSaving] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState<string | null>(null)
+  const [editingValue, setEditingValue] = useState('')
   const [syncing, setSyncing] = useState(false)
   const [syncResult, setSyncResult] = useState<{ total: number; priority: number; normal: number; muted: number } | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
@@ -104,6 +106,20 @@ export default function ContatosPage() {
       setSyncError(data.error + (data.debug ? ` | ${JSON.stringify(data.debug)}` : ''))
     }
     setSyncing(false)
+  }
+
+  async function saveName(contactId: string, name: string) {
+    const trimmed = name.trim()
+    setEditingName(null)
+    if (!trimmed) return
+    const token = await getToken()
+    const res = await fetch('/api/contatos', {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: contactId, name: trimmed }),
+    })
+    const data = await res.json()
+    if (data.id) setContacts(prev => prev.map(c => c.id === contactId ? { ...c, name: trimmed } : c))
   }
 
   async function setPriority(contactId: string, priority: string) {
@@ -237,12 +253,35 @@ export default function ContatosPage() {
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+                    {editingName === contact.id ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={editingValue}
+                        onChange={e => setEditingValue(e.target.value)}
+                        onBlur={() => saveName(contact.id, editingValue)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') saveName(contact.id, editingValue)
+                          if (e.key === 'Escape') setEditingName(null)
+                        }}
+                        className="text-sm font-medium text-gray-900 border-b border-teal-400 outline-none bg-transparent w-full"
+                      />
+                    ) : (
+                      <p
+                        className="text-sm font-medium text-gray-900 truncate cursor-pointer hover:text-teal-700 transition-colors"
+                        title="Clique para editar o nome"
+                        onClick={() => { setEditingName(contact.id); setEditingValue(contact.name || '') }}
+                      >
+                        {displayName}
+                      </p>
+                    )}
                     {contact.classified_manually && (
                       <span className="text-xs px-1.5 py-0.5 rounded-md bg-teal-50 text-teal-700 font-medium flex-shrink-0">manual</span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 truncate">{contact.remote_jid}</p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {contact.remote_jid.replace('@s.whatsapp.net', '')}
+                  </p>
                 </div>
 
                 {/* Msgs */}

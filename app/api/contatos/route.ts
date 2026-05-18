@@ -47,10 +47,9 @@ export async function PATCH(req: NextRequest) {
   const user = await getAuthUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { id, priority } = await req.json()
-  if (!id || !priority) return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 })
+  const { id, priority, name } = await req.json()
+  if (!id || (!priority && name === undefined)) return NextResponse.json({ error: 'Parâmetros inválidos' }, { status: 400 })
 
-  // Verifica que o contato pertence a uma instância do usuário
   const { data: rows } = await supabaseAdmin()
     .from('instances')
     .select('id')
@@ -61,9 +60,13 @@ export async function PATCH(req: NextRequest) {
   const inst = rows?.[0] ?? null
   if (!inst) return NextResponse.json({ error: 'Instância não encontrada' }, { status: 404 })
 
+  const update: Record<string, unknown> = {}
+  if (priority) { update.priority = priority; update.classified_manually = true }
+  if (name !== undefined) update.name = name
+
   const { data, error } = await supabaseAdmin()
     .from('contacts')
-    .update({ priority, classified_manually: true })
+    .update(update)
     .eq('id', id)
     .eq('instance_id', inst.id)
     .select()
