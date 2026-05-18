@@ -1,17 +1,18 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-
 import { getSupabase } from '@/lib/supabase'
 
 const PRIMARY = '#2A5F6B'
 
-type Estado = 'carregando' | 'sem_instancia' | 'aguardando_qr' | 'conectado' | 'erro'
+type Estado = 'carregando' | 'sem_instancia' | 'aguardando_qr' | 'conectado'
 
 export default function ConectarPage() {
   const [estado, setEstado] = useState<Estado>('carregando')
   const [qrcode, setQrcode] = useState<string | null>(null)
   const [phone, setPhone] = useState<string | null>(null)
+  const [perfilPhone, setPerfilPhone] = useState<string | null>(null)
+  const [confirmado, setConfirmado] = useState(false)
   const [criando, setCriando] = useState(false)
   const [desconectando, setDesconectando] = useState(false)
   const [erro, setErro] = useState('')
@@ -32,7 +33,6 @@ export default function ConectarPage() {
         return
       }
       const data = await res.json()
-
       if (data.connected) {
         setEstado('conectado')
         setPhone(data.phone)
@@ -40,7 +40,6 @@ export default function ConectarPage() {
         setEstado('aguardando_qr')
         if (data.qrcode) setQrcode(data.qrcode)
       } else {
-        // sem instância — só muda estado no carregamento inicial, não no polling
         if (!isPolling) setEstado('sem_instancia')
       }
     } catch {
@@ -49,10 +48,18 @@ export default function ConectarPage() {
   }, [])
 
   useEffect(() => {
-    verificarStatus(false) // carregamento inicial
+    async function init() {
+      const token = await getToken()
+      // Carrega o número salvo no perfil
+      const res = await fetch('/api/perfil', { headers: { Authorization: `Bearer ${token}` } })
+      const d = await res.json()
+      setPerfilPhone(d.whatsapp || null)
+      // Verifica status da instância
+      await verificarStatus(false)
+    }
+    init()
   }, [verificarStatus])
 
-  // Polling enquanto aguarda leitura do QR
   useEffect(() => {
     if (estado !== 'aguardando_qr') return
     const interval = setInterval(() => verificarStatus(true), 5000)
@@ -78,21 +85,25 @@ export default function ConectarPage() {
     setQrcode(data.qrcode)
     setEstado('aguardando_qr')
     setCriando(false)
-    // polling imediato após criar para detectar conexão
     setTimeout(() => verificarStatus(true), 6000)
   }
 
   async function desconectar() {
     setDesconectando(true)
     const token = await getToken()
-    await fetch('/api/whatsapp', {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    await fetch('/api/whatsapp', { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
     setEstado('sem_instancia')
     setQrcode(null)
     setPhone(null)
+    setConfirmado(false)
     setDesconectando(false)
+  }
+
+  function formatPhone(p: string) {
+    const d = p.replace(/\D/g, '')
+    if (d.length === 13) return `+${d.slice(0,2)} (${d.slice(2,4)}) ${d.slice(4,9)}-${d.slice(9)}`
+    if (d.length === 12) return `+${d.slice(0,2)} (${d.slice(2,4)}) ${d.slice(4,8)}-${d.slice(8)}`
+    return p
   }
 
   return (
@@ -112,10 +123,9 @@ export default function ConectarPage() {
             </div>
             <div>
               <p className="text-sm font-bold text-gray-900">WhatsApp conectado</p>
-              <p className="text-xs text-gray-500">{phone}</p>
+              <p className="text-xs text-gray-500">{phone ? formatPhone(phone) : '—'}</p>
             </div>
           </div>
-
           <button
             onClick={desconectar}
             disabled={desconectando}
@@ -140,11 +150,40 @@ export default function ConectarPage() {
             <p>O número conectado aqui será gerenciado pela IA. Recomendamos ter um <strong>segundo número</strong> para uso pessoal e chamadas de voz.</p>
           </div>
 
+          {/* Confirmação do número */}
+          {perfilPhone ? (
+            <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+              <p className="text-xs text-gray-600">
+                O QR Code será vinculado ao número salvo no seu perfil:
+              </p>
+              <p className="text-sm font-bold text-gray-900">{formatPhone(perfilPhone)}</p>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={confirmado}
+                  onChange={e => setConfirmado(e.target.checked)}
+                  className="mt-0.5 accent-teal-700"
+                />
+                <span className="text-xs text-gray-600">
+                  Confirmo que vou escanear o QR com este número
+                </span>
+              </label>
+            </div>
+          ) : (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-600">
+              Nenhum número salvo no perfil.{' '}
+              <a href="/dashboard" onClick={() => {}} className="font-medium underline" style={{ color: PRIMARY }}>
+                Edite seu perfil
+              </a>{' '}
+              antes de conectar.
+            </div>
+          )}
+
           {erro && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">{erro}</p>}
 
           <button
             onClick={criarInstancia}
-            disabled={criando}
+            disabled={criando || !confirmado || !perfilPhone}
             className="w-full text-white text-sm font-medium rounded-xl py-2.5 disabled:opacity-50 transition-colors"
             style={{ backgroundColor: PRIMARY }}
           >
@@ -160,19 +199,18 @@ export default function ConectarPage() {
             <p className="text-xs text-gray-500">
               Abra o WhatsApp → Dispositivos conectados → Conectar dispositivo → aponte a câmera para o código abaixo.
             </p>
+            {perfilPhone && (
+              <p className="text-xs text-gray-400 mt-1">
+                Use o número <strong>{formatPhone(perfilPhone)}</strong>
+              </p>
+            )}
           </div>
 
           {qrcode ? (
             <div className="flex justify-center">
               <div className="border-2 border-gray-100 rounded-2xl p-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={qrcode}
-                  alt="QR Code WhatsApp"
-                  width={220}
-                  height={220}
-                  style={{ width: 220, height: 220 }}
-                />
+                <img src={qrcode} alt="QR Code WhatsApp" width={220} height={220} style={{ width: 220, height: 220 }} />
               </div>
             </div>
           ) : (
@@ -181,9 +219,7 @@ export default function ConectarPage() {
             </div>
           )}
 
-          <p className="text-xs text-center text-gray-400">
-            Atualizando automaticamente a cada 5 segundos…
-          </p>
+          <p className="text-xs text-center text-gray-400">Atualizando automaticamente a cada 5 segundos…</p>
 
           <button
             onClick={() => verificarStatus(false)}
