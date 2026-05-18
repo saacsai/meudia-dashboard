@@ -33,6 +33,15 @@ async function getToken() {
   return session?.access_token || ''
 }
 
+function formatJid(jid: string): string {
+  const digits = jid.replace('@s.whatsapp.net', '').replace(/\D/g, '')
+  if (digits.startsWith('55') && digits.length === 13)
+    return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 9)}-${digits.slice(9)}`
+  if (digits.startsWith('55') && digits.length === 12)
+    return `+55 (${digits.slice(2, 4)}) ${digits.slice(4, 8)}-${digits.slice(8)}`
+  return `+${digits}`
+}
+
 export default function ContatosPage() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
@@ -173,7 +182,7 @@ export default function ContatosPage() {
       ) : (
         <div className="bg-white rounded-2xl border border-gray-200 divide-y divide-gray-100">
           {filtered.map(contact => {
-            const displayName = contact.name || contact.remote_jid
+            const displayName = contact.name || formatJid(contact.remote_jid)
             const initials = displayName[0].toUpperCase()
             const color = PRIORITY_COLOR[contact.priority] || '#9ca3af'
 

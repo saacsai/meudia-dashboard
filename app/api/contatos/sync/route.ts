@@ -45,8 +45,10 @@ function calcScore(lastTsSec: number | null, unreadCount: number, msgCount30d: n
 }
 
 function calcPriority(score: number): string {
-  if (score >= 55) return 'priority'
-  if (score >= 20) return 'normal'
+  // Thresholds calibrados para sync histórico (sem unread, sem msg_count_30d)
+  // score 40 = ativo < 7 dias; score 25 = ativo < 30 dias; score 10 = ativo < 90 dias
+  if (score >= 38) return 'priority'  // ativo nos últimos 7 dias
+  if (score >= 10) return 'normal'    // ativo nos últimos 90 dias
   return 'muted'
 }
 
