@@ -34,12 +34,28 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabaseAdmin()
     .from('contacts')
-    .select('id, name, remote_jid, priority, auto_score, msg_count_30d, last_interaction, classified_manually')
+    .select('id, name, remote_jid, priority, auto_score, msg_count_30d, last_interaction, classified_manually, contact_group_members(group_id, contact_groups(id, name, color))')
     .eq('instance_id', inst.id)
     .order('auto_score', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data ?? [])
+
+  const result = (data ?? []).map((c: Record<string, unknown>) => {
+    const members = (c.contact_group_members as { contact_groups: { id: string; name: string; color: string } | null }[]) ?? []
+    return {
+      id: c.id,
+      name: c.name,
+      remote_jid: c.remote_jid,
+      priority: c.priority,
+      auto_score: c.auto_score,
+      msg_count_30d: c.msg_count_30d,
+      last_interaction: c.last_interaction,
+      classified_manually: c.classified_manually,
+      groups: members.map(m => m.contact_groups).filter(Boolean),
+    }
+  })
+
+  return NextResponse.json(result)
 }
 
 // PATCH — atualiza um contato (id) ou vários em bulk (ids[])
