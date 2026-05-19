@@ -56,22 +56,22 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabaseAdmin()
     .from('contacts')
-    .upsert(
-      {
-        instance_id: inst.id,
-        remote_jid,
-        name: name.trim(),
-        name_locked: true,
-        priority: 'normal',
-        auto_score: 0,
-        msg_count_30d: 0,
-      },
-      { onConflict: 'instance_id,remote_jid', ignoreDuplicates: false }
-    )
+    .insert({
+      instance_id: inst.id,
+      remote_jid,
+      name: name.trim(),
+      name_locked: true,
+      priority: 'normal',
+      auto_score: 0,
+      msg_count_30d: 0,
+    })
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    if (error.code === '23505') return NextResponse.json({ error: 'Este número já existe na sua lista de contatos' }, { status: 409 })
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   return NextResponse.json({ ...data, groups: [] })
 }
