@@ -15,7 +15,7 @@ function db() {
 }
 
 const GEMINI_URL = () =>
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`
 
 const TOOL_DECLARATIONS = [
   {
@@ -197,7 +197,7 @@ async function runGemini(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents,
-      tools: [{ function_declarations: TOOL_DECLARATIONS }],
+      tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
       systemInstruction: { parts: [{ text: systemText }] },
       generationConfig: { temperature: 0.3, maxOutputTokens: 1024 }
     })
@@ -205,7 +205,7 @@ async function runGemini(
 
   const json = await res.json()
   if (!res.ok) {
-    console.error('Gemini error:', json)
+    console.error('Gemini error status:', res.status, JSON.stringify(json))
     return { text: 'Não consegui processar o pedido agora. Tente novamente em instantes.', toolsUsed }
   }
 
