@@ -10,6 +10,7 @@ import GerenciarPlanoPage from '@/components/GerenciarPlanoPage'
 const PRIMARY = '#2A5F6B'
 
 const NAV = [
+  { href: '/dashboard/chat',       label: 'BIA',        icon: '◈' },
   { href: '/dashboard',            label: 'Início',     icon: '⊞' },
   { href: '/dashboard/conectar',   label: 'WhatsApp',   icon: '◉' },
   { href: '/dashboard/assistente', label: 'Assistente', icon: '✦' },
