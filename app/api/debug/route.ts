@@ -28,6 +28,7 @@ export async function GET() {
   }
 
   return NextResponse.json({
+    version: 'v6',
     gemini_key_prefix: key ? key.slice(0, 12) : 'UNDEFINED',
     gemini_key_length: key?.length ?? 0,
     gemini_status: geminiStatus,
