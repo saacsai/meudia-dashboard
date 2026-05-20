@@ -41,7 +41,8 @@ export async function POST(req: NextRequest) {
     .eq('id', user.id)
     .single()
 
-  const userName = profile?.full_name || user.email?.split('@')[0] || 'usuário'
+  const fullName = profile?.full_name || user.email?.split('@')[0] || 'usuário'
+  const userName = fullName.split(' ')[0]
 
   const { data: historyRows } = await supabase
     .from('assistant_messages')
