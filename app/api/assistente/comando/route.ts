@@ -192,6 +192,7 @@ async function runGemini(
 ): Promise<{ text: string; toolsUsed: Array<{ tool: string; args: Record<string, unknown>; result: ToolResult }> }> {
   const toolsUsed: Array<{ tool: string; args: Record<string, unknown>; result: ToolResult }> = []
 
+  console.log('GEMINI_KEY prefix:', process.env.GEMINI_API_KEY?.slice(0, 10) ?? 'UNDEFINED')
   const res = await fetch(GEMINI_URL(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
