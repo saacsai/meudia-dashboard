@@ -17,63 +17,75 @@ function db() {
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`
 
 export async function POST(req: NextRequest) {
-  // Step 1 — auth
   const user = await getAuthUser(req)
-  if (!user) return NextResponse.json({ response: 'DIAG: auth falhou — sem usuário' })
+  if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  // Step 2 — parse body
-  let message = ''
-  try {
-    const body = await req.json()
-    message = body.message?.trim() ?? ''
-  } catch {
-    return NextResponse.json({ response: 'DIAG: erro ao parsear body' })
-  }
-  if (!message) return NextResponse.json({ response: 'DIAG: mensagem vazia' })
+  const { message } = await req.json()
+  if (!message?.trim()) return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 })
 
-  // Step 3 — instance
   const supabase = db()
-  const { data: instances, error: instErr } = await supabase
+
+  const { data: instances } = await supabase
     .from('instances')
     .select('id')
     .eq('user_id', user.id)
     .eq('active', true)
     .limit(1)
-  if (instErr) return NextResponse.json({ response: `DIAG: instância erro — ${instErr.message}` })
+
   const inst = instances?.[0] ?? null
-  if (!inst) return NextResponse.json({ response: 'DIAG: nenhuma instância ativa' })
+  if (!inst) return NextResponse.json({ error: 'Nenhuma instância ativa' }, { status: 404 })
 
-  // Step 4 — Gemini
-  const key = process.env.GEMINI_API_KEY
-  if (!key) return NextResponse.json({ response: 'DIAG: GEMINI_API_KEY não definida' })
+  const { data: profile } = await supabase
+    .from('users')
+    .select('full_name')
+    .eq('id', user.id)
+    .single()
 
-  let geminiText = ''
-  try {
-    const res = await fetch(`${GEMINI_URL}?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: 'Você é a BIA, assistente do usuário no MeuDIA. Responda de forma breve.' }] },
-        contents: [{ role: 'user', parts: [{ text: message }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 512 }
-      })
+  const userName = profile?.full_name || user.email?.split('@')[0] || 'usuário'
+
+  const { data: historyRows } = await supabase
+    .from('assistant_messages')
+    .select('role, content')
+    .eq('instance_id', inst.id)
+    .order('created_at', { ascending: false })
+    .limit(10)
+
+  const history = (historyRows ?? [])
+    .reverse()
+    .map(r => ({ role: r.role === 'assistant' ? 'model' : 'user', parts: [{ text: r.content }] }))
+
+  const system = `Você é a BIA, assistente pessoal de ${userName} no MeuDIA.
+O MeuDIA gerencia o WhatsApp de ${userName} respondendo contatos automaticamente.
+Você ajuda ${userName} a gerenciar contatos, consultar mensagens na fila, criar grupos e executar ações no sistema.
+Responda de forma breve e direta. Data: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`
+
+  const contents = [
+    ...history,
+    { role: 'user', parts: [{ text: message.trim() }] }
+  ]
+
+  const res = await fetch(`${GEMINI_URL}?key=${process.env.GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: system }] },
+      contents,
+      generationConfig: { temperature: 0.4, maxOutputTokens: 512 }
     })
-    const json = await res.json()
-    if (!res.ok) return NextResponse.json({ response: `DIAG: Gemini ${res.status} — ${json?.error?.message?.slice(0, 100)}` })
-    geminiText = json.candidates?.[0]?.content?.parts?.[0]?.text ?? 'sem resposta'
-  } catch (e) {
-    return NextResponse.json({ response: `DIAG: fetch Gemini falhou — ${String(e)}` })
+  })
+
+  const json = await res.json()
+  if (!res.ok) {
+    console.error('Gemini error', res.status, JSON.stringify(json).slice(0, 200))
+    return NextResponse.json({ response: 'Não consegui processar. Tente novamente.' })
   }
 
-  // Step 5 — save history
-  try {
-    await supabase.from('assistant_messages').insert([
-      { instance_id: inst.id, role: 'user', content: message },
-      { instance_id: inst.id, role: 'assistant', content: geminiText }
-    ])
-  } catch {
-    // não bloqueia mesmo se falhar
-  }
+  const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Feito.'
 
-  return NextResponse.json({ response: geminiText, toolsUsed: [] })
+  await supabase.from('assistant_messages').insert([
+    { instance_id: inst.id, role: 'user', content: message.trim() },
+    { instance_id: inst.id, role: 'assistant', content: text }
+  ])
+
+  return NextResponse.json({ response: text, toolsUsed: [] })
 }
