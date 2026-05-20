@@ -206,8 +206,8 @@ async function runGemini(
 
   const json = await res.json()
   if (!res.ok) {
-    console.error('Gemini error status:', res.status, JSON.stringify(json))
-    return { text: 'Não consegui processar o pedido agora. Tente novamente em instantes.', toolsUsed }
+    const keyDebug = process.env.GEMINI_API_KEY ? `key_prefix:${process.env.GEMINI_API_KEY.slice(0,10)}` : 'key:UNDEFINED'
+    return { text: `Erro Gemini ${res.status} — ${keyDebug}`, toolsUsed }
   }
 
   const parts: GeminiPart[] = json.candidates?.[0]?.content?.parts ?? []
