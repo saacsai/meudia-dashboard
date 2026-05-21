@@ -11,6 +11,13 @@ async function getToken() {
   return session?.access_token || ''
 }
 
+const WARNING_BULLETS = [
+  'O MeuDIA vai cuidar do seu WhatsApp enquanto você foca no que importa.',
+  'Você tem controle total — desconecte quando quiser, sem perder nenhum dado.',
+  'Para funcionar de verdade, você precisa confiar no sistema. Se delegar mas ficar checando cada mensagem que entra, o efeito se perde.',
+  'Sua assistente gerencia expectativa, não decisões. Ela não responde, não resolve e não decide nada por você — a menos que você configure explicitamente.',
+]
+
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 
 function BiaAvatar() {
@@ -37,7 +44,20 @@ function ReadCard({ bullets }: { bullets: string[] }) {
   )
 }
 
-// ─── Step 1: WhatsApp ─────────────────────────────────────────────────────────
+function TypingIndicator() {
+  return (
+    <div className="flex justify-start items-end gap-2">
+      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: PRIMARY }}>BI</div>
+      <div className="px-4 py-3 rounded-2xl rounded-bl-sm flex gap-1 items-center" style={{ background: 'white', border: '1px solid #e5e7eb' }}>
+        {[0, 1, 2].map(i => (
+          <span key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: PRIMARY, animationDelay: `${i * 0.15}s` }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── WhatsApp ─────────────────────────────────────────────────────────────────
 
 type WaState = 'loading' | 'disconnected' | 'awaiting_qr' | 'connected'
 
@@ -171,7 +191,7 @@ function WhatsAppStep({ onConnected }: { onConnected: () => void }) {
   )
 }
 
-// ─── Step 2: Contatos ─────────────────────────────────────────────────────────
+// ─── Contatos ─────────────────────────────────────────────────────────────────
 
 function ContactsStep() {
   return (
@@ -182,7 +202,7 @@ function ContactsStep() {
   )
 }
 
-// ─── Step 3: Janelas de resposta ──────────────────────────────────────────────
+// ─── Janelas de resposta ──────────────────────────────────────────────────────
 
 function DigestStep({ onSaved }: { onSaved: () => void }) {
   const [form, setForm] = useState({ morning_time: '08:00', afternoon_time: '17:00' })
@@ -248,7 +268,7 @@ function DigestStep({ onSaved }: { onSaved: () => void }) {
   )
 }
 
-// ─── Step 4: Assistente ───────────────────────────────────────────────────────
+// ─── Assistente ───────────────────────────────────────────────────────────────
 
 function AssistenteStep({ onComplete }: { onComplete: (name: string) => void }) {
   const [form, setForm] = useState({ persona_name: '', persona_tone: 'profissional', persona_response_size: 'curto', persona_description: '', response_hint: '' })
@@ -337,56 +357,18 @@ function AssistenteStep({ onComplete }: { onComplete: (name: string) => void }) 
   )
 }
 
-// ─── Config dos passos ────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-interface StepConfig {
-  title: string
-  biaIntro: string
-  bullets: string[]
-  continueLabel?: string
+type Phase = 0 | 1 | 2 | 3 | 4 | 5
+
+type ChatMsg = {
+  id: string
+  role: 'bia' | 'user'
+  content?: string
+  widget?: 'warnings' | 'whatsapp' | 'contacts' | 'digest' | 'assistente'
 }
 
-const STEPS: StepConfig[] = [
-  {
-    title: 'WhatsApp',
-    biaIntro: 'Antes de conectar seu WhatsApp, leia isso com atenção:',
-    bullets: [
-      'O MeuDIA vai cuidar do seu WhatsApp enquanto você foca no que importa.',
-      'Você tem controle total — desconecte quando quiser, sem perder nenhum dado.',
-      'Para funcionar de verdade, você precisa confiar no sistema. Se delegar mas ficar checando cada mensagem que entra, o efeito se perde.',
-      'Sua assistente gerencia expectativa, não decisões. Ela não responde, não resolve e não decide nada por você — a menos que você configure explicitamente.',
-    ],
-  },
-  {
-    title: 'Contatos',
-    biaIntro: 'Ótimo, WhatsApp conectado! Agora sobre seus contatos:',
-    bullets: [
-      'Nem todos os seus contatos entram automaticamente — só os que já têm histórico de mensagens.',
-      'Alguns precisarão ser adicionados manualmente. Você decide quem importa.',
-      'A classificação por grupos é fundamental: define quem pode interromper o seu dia e quem pode esperar.',
-      'Você faz isso na aba Contatos, ou pede para a sua assistente ajudar depois de concluir a configuração.',
-    ],
-    continueLabel: 'Entendido, continuar →',
-  },
-  {
-    title: 'Meu Dia',
-    biaIntro: 'Esse é o coração do MeuDIA. Configure suas janelas de resposta:',
-    bullets: [
-      'A tela "Meu Dia" é a sua central diária — abre assim que você faz login.',
-      'Ela mostra as mensagens acumuladas organizadas por prioridade.',
-      'As janelas de resposta são os momentos do dia em que você abre o WhatsApp. Fora delas, o WhatsApp não existe para você.',
-    ],
-    continueLabel: 'Continuar →',
-  },
-  {
-    title: 'Sua Assistente',
-    biaIntro: 'Última etapa. Um detalhe importante antes de começar:',
-    bullets: [
-      'Eu, BIA, sou a assistente do produto — estou na aba Dúvidas para qualquer coisa sobre o sistema.',
-      'Sua assistente pessoal tem nome e personalidade que você define. É ela que seus contatos vão conhecer.',
-    ],
-  },
-]
+type QuickReply = { label: string; action: () => void }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
@@ -397,65 +379,325 @@ interface OnboardingViewProps {
 }
 
 export default function OnboardingView({ userName, initialStep, onComplete }: OnboardingViewProps) {
-  const [step, setStep] = useState(Math.min(Math.max(initialStep, 0), 3))
-  const [stepReady, setStepReady] = useState(false)
-  const [advancing, setAdvancing] = useState(false)
+  const [messages, setMessages] = useState<ChatMsg[]>([])
+  const [phase, setPhase] = useState<Phase>(0)
+  const [typing, setTyping] = useState(false)
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const [quickReplies, setQuickReplies] = useState<QuickReply[]>([])
 
-  const config = STEPS[step]
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useRef(true)
+  const conversationId = useRef<string | null>(null)
 
-  // Contacts step is always ready to advance
-  const canAdvance =
-    step === 1 ? true :
-    step < 3 ? stepReady :
-    false
+  // Refs for widget callbacks — prevents stale closures since widgets are rendered
+  // from a frozen messages array that never changes after insertion
+  const onWhatsAppConnectedRef = useRef<() => void>(() => {})
+  const onDigestSavedRef = useRef<() => void>(() => {})
+  const onAssistanteCompleteRef = useRef<(name: string) => void>(() => {})
 
-  async function advance() {
-    if (advancing || !canAdvance) return
-    setAdvancing(true)
+  const stableOnWhatsAppConnected = useCallback(() => onWhatsAppConnectedRef.current(), [])
+  const stableOnDigestSaved = useCallback(() => onDigestSavedRef.current(), [])
+  const stableOnAssistanteComplete = useCallback((name: string) => onAssistanteCompleteRef.current(name), [])
+
+  useEffect(() => () => { mountedRef.current = false }, [])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, typing])
+
+  // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+  function userSay(content: string) {
+    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'user', content }])
+  }
+
+  async function biaSay(content?: string, widget?: ChatMsg['widget'], delay = 900) {
+    setTyping(true)
+    await new Promise(r => setTimeout(r, delay))
+    if (!mountedRef.current) return
+    setTyping(false)
+    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bia', content, widget }])
+  }
+
+  async function advanceStep(step: number) {
     const token = await getToken()
-    const nextStep = step + 1
     await fetch('/api/onboarding/step', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ step: nextStep })
+      body: JSON.stringify({ step })
     })
-    setStep(nextStep)
-    setStepReady(false)
-    setAdvancing(false)
+  }
+
+  // ─── Phase flow ───────────────────────────────────────────────────────────────
+
+  async function initPhase0() {
+    await biaSay(
+      `Olá${userName ? `, ${userName}` : ''}! Seja bem-vindo ao MeuDIA — organizado e priorizado. Todo dia.\n\nNosso objetivo é te auxiliar a organizar sua agenda, minimizando distrações e tarefas que tiram o seu foco e concentração.\n\nAntes de iniciarmos a configuração, você tem alguma dúvida?`,
+      undefined,
+      600
+    )
+    setPhase(0)
+    setQuickReplies([{ label: 'Por ora não →', action: skipToPhase1 }])
+  }
+
+  async function skipToPhase1() {
+    setQuickReplies([])
+    userSay('Por ora não →')
+    await biaSay('Ok! Antes de iniciarmos, leia estes avisos importantes:')
+    await biaSay(undefined, 'warnings', 400)
+    await biaSay('Você confirma que leu e entende como o sistema funciona?', undefined, 600)
+    setPhase(1)
+    setQuickReplies([{ label: 'Li e aceito ✓', action: startPhase2 }])
+  }
+
+  async function startPhase2() {
+    setQuickReplies([])
+    userSay('Li e aceito ✓')
+    await advanceStep(1)
+    await biaSay('Ótimo! Agora vamos conectar seu WhatsApp. É por aqui que suas mensagens chegam e que sua assistente vai atuar.')
+    await biaSay(undefined, 'whatsapp', 400)
+    setPhase(2)
+  }
+
+  async function handleWhatsAppConnected() {
+    await advanceStep(2)
+    await biaSay('WhatsApp conectado com sucesso! ✓', undefined, 400)
+    await biaSay('Seus contatos aparecem automaticamente conforme as mensagens chegam. Você pode organizá-los na aba Contatos ou pedir à sua assistente depois.')
+    await biaSay(undefined, 'contacts', 300)
+    setPhase(3)
+    setQuickReplies([{ label: 'Entendido →', action: startPhase4 }])
+  }
+
+  async function startPhase4() {
+    setQuickReplies([])
+    userSay('Entendido →')
+    await advanceStep(3)
+    await biaSay('Configure suas janelas de resposta — os momentos do dia em que você abre o WhatsApp. Fora delas, o WhatsApp não existe para você.')
+    await biaSay(undefined, 'digest', 400)
+    setPhase(4)
+  }
+
+  async function handleDigestSaved() {
+    await biaSay('Janelas salvas! ✓', undefined, 400)
+    await biaSay('Última etapa! Vamos configurar sua assistente pessoal.')
+    await biaSay('Eu, BIA, sou a assistente do produto — estou na aba Dúvidas para qualquer coisa sobre o sistema. Sua assistente pessoal terá o nome e a personalidade que você definir.', undefined, 600)
+    await biaSay(undefined, 'assistente', 400)
+    setPhase(5)
+  }
+
+  async function handleAssistanteComplete(name: string) {
+    await biaSay(`Perfeito! ${name} está pronta para trabalhar. Bem-vindo ao MeuDIA!`, undefined, 400)
+    onComplete(name)
+  }
+
+  // Keep refs current on every render
+  onWhatsAppConnectedRef.current = handleWhatsAppConnected
+  onDigestSavedRef.current = handleDigestSaved
+  onAssistanteCompleteRef.current = handleAssistanteComplete
+
+  // ─── Phase 0: free Q&A ───────────────────────────────────────────────────────
+
+  async function sendQuestion() {
+    const text = input.trim()
+    if (!text || sending) return
+    setInput('')
+    setSending(true)
+    setQuickReplies([])
+    userSay(text)
+    setTyping(true)
+    try {
+      const token = await getToken()
+      const res = await fetch('/api/assistente/comando', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: text, conversation_id: conversationId.current, chatSource: 'bia' })
+      })
+      const data = await res.json()
+      if (data.conversation_id) conversationId.current = data.conversation_id
+      setTyping(false)
+      if (!mountedRef.current) return
+      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bia', content: data.response || 'Desculpe, não consegui processar sua pergunta.' }])
+      await biaSay('Mais alguma dúvida?', undefined, 600)
+    } catch {
+      setTyping(false)
+      if (!mountedRef.current) return
+      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bia', content: 'Ocorreu um erro ao conectar. Tente novamente.' }])
+    } finally {
+      setSending(false)
+      setQuickReplies([{ label: 'Por ora não →', action: skipToPhase1 }])
+    }
+  }
+
+  function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendQuestion()
+    }
+  }
+
+  // ─── Resume (initialStep > 0) ─────────────────────────────────────────────────
+
+  function buildResumedMessages(step: number): { msgs: ChatMsg[]; resumePhase: Phase } {
+    const msgs: ChatMsg[] = [
+      { id: 'r0', role: 'bia', content: `Bem-vindo de volta${userName ? `, ${userName}` : ''}! Vamos continuar de onde paramos.` }
+    ]
+    if (step === 0) {
+      msgs.push({ id: 'r1', role: 'bia', content: 'Conecte seu WhatsApp para continuar:', widget: 'whatsapp' })
+      return { msgs, resumePhase: 2 }
+    }
+    msgs.push({ id: 'r2', role: 'bia', content: 'WhatsApp conectado! ✓' })
+    if (step === 1) {
+      msgs.push({ id: 'r3', role: 'bia', content: 'Sobre seus contatos:', widget: 'contacts' })
+      return { msgs, resumePhase: 3 }
+    }
+    if (step === 2) {
+      msgs.push({ id: 'r4', role: 'bia', content: 'Configure suas janelas de resposta:', widget: 'digest' })
+      return { msgs, resumePhase: 4 }
+    }
+    msgs.push({ id: 'r5', role: 'bia', content: 'Configure sua assistente pessoal:', widget: 'assistente' })
+    return { msgs, resumePhase: 5 }
+  }
+
+  // ─── Mount ────────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (initialStep === 0) {
+      initPhase0()
+    } else {
+      const { msgs, resumePhase } = buildResumedMessages(initialStep)
+      setMessages(msgs)
+      setPhase(resumePhase)
+      if (resumePhase === 3) {
+        setQuickReplies([{ label: 'Entendido →', action: startPhase4 }])
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ─── Render ───────────────────────────────────────────────────────────────────
+
+  function renderMessage(msg: ChatMsg) {
+    if (msg.role === 'user') {
+      return (
+        <div key={msg.id} className="flex justify-end">
+          <div
+            className="max-w-[80%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap"
+            style={{ background: PRIMARY, color: 'white', borderBottomRightRadius: '4px' }}
+          >
+            {msg.content}
+          </div>
+        </div>
+      )
+    }
+
+    return (
+      <div key={msg.id} className="flex justify-start items-end gap-2">
+        <BiaAvatar />
+        <div className="max-w-[85%] flex flex-col gap-2">
+          {msg.content && (
+            <div
+              className="px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap"
+              style={{ background: 'white', border: '1px solid #e5e7eb', color: '#1f2937', borderBottomLeftRadius: msg.widget ? '12px' : '4px' }}
+            >
+              {msg.content}
+            </div>
+          )}
+          {msg.widget === 'warnings' && <ReadCard bullets={WARNING_BULLETS} />}
+          {msg.widget === 'whatsapp' && (
+            <div className="w-full max-w-xs">
+              <WhatsAppStep onConnected={stableOnWhatsAppConnected} />
+            </div>
+          )}
+          {msg.widget === 'contacts' && <ContactsStep />}
+          {msg.widget === 'digest' && (
+            <div className="w-full max-w-xs">
+              <DigestStep onSaved={stableOnDigestSaved} />
+            </div>
+          )}
+          {msg.widget === 'assistente' && (
+            <div className="w-full max-w-xs">
+              <AssistenteStep onComplete={stableOnAssistanteComplete} />
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="max-w-lg space-y-6">
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
 
-      {/* BIA message */}
-      <div className="flex items-start gap-3">
-        <BiaAvatar />
-        <p className="text-sm text-gray-700 leading-relaxed pt-1">
-          {step === 0 && userName ? `Olá, ${userName}! Sou a BIA. ` : ''}{config.biaIntro}
-        </p>
+      {/* Header */}
+      <div className="flex items-center gap-3 pb-4 border-b border-gray-200 flex-shrink-0">
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+          style={{ background: PRIMARY }}
+        >BI</div>
+        <div>
+          <p className="font-semibold text-gray-800 text-sm">BIA</p>
+          <p className="text-xs text-gray-400">Configuração inicial · MeuDIA</p>
+        </div>
       </div>
 
-      {/* Leia com atenção */}
-      <ReadCard bullets={config.bullets} />
-
-      {/* Action area */}
-      <div>
-        {step === 0 && <WhatsAppStep onConnected={() => setStepReady(true)} />}
-        {step === 1 && <ContactsStep />}
-        {step === 2 && <DigestStep onSaved={() => setStepReady(true)} />}
-        {step === 3 && <AssistenteStep onComplete={onComplete} />}
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+        {messages.map(renderMessage)}
+        {typing && <TypingIndicator />}
+        <div ref={bottomRef} />
       </div>
 
-      {/* Advance button (steps 0–2) */}
-      {step < 3 && (
-        <button
-          onClick={advance}
-          disabled={!canAdvance || advancing}
-          className="w-full text-white text-sm font-medium rounded-xl py-3 disabled:opacity-40 transition-all"
-          style={{ backgroundColor: PRIMARY }}
-        >
-          {advancing ? 'Avançando…' : config.continueLabel || 'Continuar →'}
-        </button>
+      {/* Quick replies */}
+      {quickReplies.length > 0 && (
+        <div className="flex gap-2 flex-wrap py-3 flex-shrink-0">
+          {quickReplies.map(qr => (
+            <button
+              key={qr.label}
+              onClick={qr.action}
+              disabled={sending}
+              className="px-4 py-2 rounded-full text-sm font-medium border transition-colors disabled:opacity-50 hover:opacity-80"
+              style={{ borderColor: PRIMARY, color: PRIMARY, background: `${PRIMARY}0D` }}
+            >
+              {qr.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Text input — only during phase 0 */}
+      {phase === 0 && (
+        <div className="pt-3 border-t border-gray-200 flex-shrink-0">
+          <div className="flex gap-2 items-end">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKey}
+              placeholder="Tem alguma dúvida? (Enter para enviar)"
+              rows={1}
+              className="flex-1 resize-none rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:border-gray-400 bg-white"
+              style={{ minHeight: '44px', maxHeight: '120px' }}
+              onInput={e => {
+                const t = e.currentTarget
+                t.style.height = 'auto'
+                t.style.height = Math.min(t.scrollHeight, 120) + 'px'
+              }}
+            />
+            <button
+              onClick={sendQuestion}
+              disabled={!input.trim() || sending}
+              className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-opacity disabled:opacity-40"
+              style={{ background: PRIMARY }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-400 mt-1.5 text-center">Shift+Enter para nova linha · Enter para enviar</p>
+        </div>
       )}
 
     </div>
