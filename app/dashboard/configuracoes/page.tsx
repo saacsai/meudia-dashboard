@@ -25,13 +25,6 @@ interface DigestSchedule {
   active: boolean
 }
 
-const PERSONAS = [
-  { id: 'BIA',    name: 'BIA',         tagline: 'Jovial e próxima',         avatarBg: '#7C3AED', persona_tone: 'descontraido', persona_response_size: 'curto',    persona_description: 'Sou a BIA, assistente digital de quem você está tentando falar. Estou aqui para garantir que nenhuma mensagem importante fique sem atenção!', response_hint: 'Retorno em breve! Fico de olho nas mensagens prioritárias.' },
-  { id: 'ADONAI', name: 'ADONAI',      tagline: 'Corporativo e preciso',    avatarBg: '#1E40AF', persona_tone: 'formal',       persona_response_size: 'detalhado', persona_description: 'Sou ADONAI, assistente executivo responsável pela gestão das comunicações.', response_hint: 'Retorno assim que possível. Mensagens urgentes serão escaladas imediatamente.' },
-  { id: 'MAIA',   name: 'MAIA',        tagline: 'Equilibrada e profissional',avatarBg: '#059669', persona_tone: 'profissional', persona_response_size: 'curto',    persona_description: 'Sou MAIA, assistente profissional. Estou gerenciando as mensagens e garantindo que as prioridades sejam atendidas.', response_hint: 'Retorno em breve. Mensagens urgentes têm prioridade.', recommended: true },
-  { id: 'custom', name: 'Personalizado',tagline: 'Sua própria marca',        avatarBg: '#9CA3AF', persona_tone: 'profissional', persona_response_size: 'curto',    persona_description: '', response_hint: '' },
-] as const
-
 const inputClass = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none transition-colors"
 
 // ─── WhatsApp Section ─────────────────────────────────────────────────────────
@@ -185,7 +178,6 @@ function AssistenteSection() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [selectedPersona, setSelectedPersona] = useState<string | null>(null)
   const [form, setForm] = useState({ persona_name: '', persona_tone: 'profissional', persona_response_size: 'curto', persona_description: '', response_hint: '' })
 
   useEffect(() => {
@@ -196,29 +188,12 @@ function AssistenteSection() {
       const { data } = await supabase.from('instances').select('id, persona_name, persona_tone, persona_response_size, persona_description, response_hint').eq('user_id', session.user.id).eq('active', true).single()
       if (data) {
         setInstance(data)
-        const upper = data.persona_name?.toUpperCase()
-        const isPreset = ['BIA', 'ADONAI', 'MAIA'].includes(upper)
-        if (isPreset) {
-          setSelectedPersona(upper)
-          setForm({ persona_name: data.persona_name || '', persona_tone: data.persona_tone || 'profissional', persona_response_size: data.persona_response_size || 'curto', persona_description: data.persona_description || '', response_hint: data.response_hint || '' })
-        } else if (data.persona_name) {
-          setSelectedPersona('custom')
-          setForm({ persona_name: data.persona_name || '', persona_tone: data.persona_tone || 'profissional', persona_response_size: data.persona_response_size || 'curto', persona_description: data.persona_description || '', response_hint: data.response_hint || '' })
-        }
+        setForm({ persona_name: data.persona_name || '', persona_tone: data.persona_tone || 'profissional', persona_response_size: data.persona_response_size || 'curto', persona_description: data.persona_description || '', response_hint: data.response_hint || '' })
       }
       setLoading(false)
     }
     load()
   }, [])
-
-  function selectPersona(p: typeof PERSONAS[number]) {
-    setSelectedPersona(p.id)
-    if (p.id === 'custom') {
-      setForm(f => ({ ...f, persona_tone: 'profissional', persona_response_size: 'curto' }))
-    } else {
-      setForm({ persona_name: p.name, persona_tone: p.persona_tone, persona_response_size: p.persona_response_size, persona_description: p.persona_description, response_hint: p.response_hint })
-    }
-  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
@@ -236,77 +211,57 @@ function AssistenteSection() {
   if (loading) return <p className="text-sm text-gray-400">Carregando…</p>
   if (!instance) return <p className="text-sm text-gray-500">Nenhuma instância encontrada.</p>
 
-  const isCustom = selectedPersona === 'custom'
+  const nameIsBia = form.persona_name.trim().toUpperCase() === 'BIA'
 
   return (
-    <form onSubmit={handleSave} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        {PERSONAS.map(p => {
-          const active = selectedPersona === p.id
-          return (
-            <button key={p.id} type="button" onClick={() => selectPersona(p)}
-              className="relative text-left p-4 rounded-xl border-2 transition-all"
-              style={{ borderColor: active ? p.avatarBg : '#e5e7eb', backgroundColor: active ? `${p.avatarBg}0d` : 'white' }}
-            >
-              {'recommended' in p && p.recommended && !active && (
-                <span className="absolute top-3 right-3 text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: p.avatarBg }}>recomendado</span>
-              )}
-              {active && (
-                <span className="absolute top-3 right-3 w-4 h-4 rounded-full flex items-center justify-center" style={{ backgroundColor: p.avatarBg }}>
-                  <svg width="8" height="8" viewBox="0 0 10 10" fill="none"><polyline points="1.5 5 4 7.5 8.5 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </span>
-              )}
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold mb-2" style={{ backgroundColor: p.avatarBg }}>
-                {p.name.slice(0, 1)}
-              </div>
-              <p className="text-sm font-bold text-gray-900">{p.name}</p>
-              <p className="text-xs font-medium mt-0.5" style={{ color: p.avatarBg }}>{p.tagline}</p>
-            </button>
-          )
-        })}
+    <form onSubmit={handleSave} className="space-y-3">
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Nome da assistente</label>
+        <input
+          type="text"
+          value={form.persona_name}
+          onChange={e => setForm(f => ({ ...f, persona_name: e.target.value }))}
+          placeholder="Ex: MAIA, LARA, ZEUS, NINA…"
+          className={inputClass}
+          onFocus={e => e.target.style.borderColor = nameIsBia ? '#f59e0b' : PRIMARY}
+          onBlur={e => e.target.style.borderColor = ''}
+          style={{ borderColor: nameIsBia ? '#f59e0b' : '' }}
+        />
+        {nameIsBia && (
+          <p className="mt-1.5 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            BIA é o nome da assistente oficial do MeuDIA. Escolha outro nome para evitar confusões — sua assistente pessoal deve ter uma identidade própria.
+          </p>
+        )}
       </div>
-
-      {selectedPersona && (
-        <div className="space-y-3 pt-2">
-          {isCustom && (
-            <>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Nome da assistente</label>
-                <input type="text" value={form.persona_name} onChange={e => setForm(f => ({ ...f, persona_name: e.target.value }))} placeholder="Ex: LARA, ZEUS, NINA…" className={inputClass} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Tom</label>
-                  <select value={form.persona_tone} onChange={e => setForm(f => ({ ...f, persona_tone: e.target.value }))} className={inputClass + ' cursor-pointer'} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''}>
-                    <option value="formal">Formal</option>
-                    <option value="profissional">Profissional</option>
-                    <option value="descontraido">Descontraído</option>
-                    <option value="amigavel">Amigável</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Respostas</label>
-                  <select value={form.persona_response_size} onChange={e => setForm(f => ({ ...f, persona_response_size: e.target.value }))} className={inputClass + ' cursor-pointer'} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''}>
-                    <option value="curto">Curtas</option>
-                    <option value="detalhado">Detalhadas</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Personalidade</label>
-                <textarea value={form.persona_description} onChange={e => setForm(f => ({ ...f, persona_description: e.target.value }))} placeholder="Como a assistente se apresenta…" rows={3} className={inputClass + ' resize-none'} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Previsão de retorno</label>
-                <input type="text" value={form.response_hint} onChange={e => setForm(f => ({ ...f, response_hint: e.target.value }))} placeholder="Ex: Retorno ainda hoje, até as 17h…" className={inputClass} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''} />
-              </div>
-            </>
-          )}
-          <button type="submit" disabled={saving} className="w-full text-white text-sm font-medium rounded-xl py-2.5 disabled:opacity-50 transition-colors" style={{ backgroundColor: saved ? '#16a34a' : PRIMARY }}>
-            {saving ? 'Salvando…' : saved ? '✓ Salvo' : 'Salvar'}
-          </button>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Tom</label>
+          <select value={form.persona_tone} onChange={e => setForm(f => ({ ...f, persona_tone: e.target.value }))} className={inputClass + ' cursor-pointer'} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''}>
+            <option value="formal">Formal</option>
+            <option value="profissional">Profissional</option>
+            <option value="descontraido">Descontraído</option>
+            <option value="amigavel">Amigável</option>
+          </select>
         </div>
-      )}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Respostas</label>
+          <select value={form.persona_response_size} onChange={e => setForm(f => ({ ...f, persona_response_size: e.target.value }))} className={inputClass + ' cursor-pointer'} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''}>
+            <option value="curto">Curtas</option>
+            <option value="detalhado">Detalhadas</option>
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Personalidade</label>
+        <textarea value={form.persona_description} onChange={e => setForm(f => ({ ...f, persona_description: e.target.value }))} placeholder="Como a assistente se apresenta…" rows={3} className={inputClass + ' resize-none'} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''} />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Previsão de retorno</label>
+        <input type="text" value={form.response_hint} onChange={e => setForm(f => ({ ...f, response_hint: e.target.value }))} placeholder="Ex: Retorno ainda hoje, até as 17h…" className={inputClass} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''} />
+      </div>
+      <button type="submit" disabled={saving} className="w-full text-white text-sm font-medium rounded-xl py-2.5 disabled:opacity-50 transition-colors" style={{ backgroundColor: saved ? '#16a34a' : PRIMARY }}>
+        {saving ? 'Salvando…' : saved ? '✓ Salvo' : 'Salvar'}
+      </button>
     </form>
   )
 }
