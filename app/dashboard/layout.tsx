@@ -68,8 +68,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     function onNameChange(e: CustomEvent<string>) {
       setAssistantName(e.detail)
     }
+    function onStepChange(e: CustomEvent<number>) {
+      setOnboardingStep(e.detail)
+    }
     window.addEventListener('assistantNameChanged', onNameChange as EventListener)
-    return () => window.removeEventListener('assistantNameChanged', onNameChange as EventListener)
+    window.addEventListener('onboardingStepChanged', onStepChange as EventListener)
+    return () => {
+      window.removeEventListener('assistantNameChanged', onNameChange as EventListener)
+      window.removeEventListener('onboardingStepChanged', onStepChange as EventListener)
+    }
   }, [])
 
   const NAV = [

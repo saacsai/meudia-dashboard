@@ -428,15 +428,22 @@ export default function OnboardingView({ userName, initialStep, onComplete }: On
       headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({ step })
     })
+    window.dispatchEvent(new CustomEvent('onboardingStepChanged', { detail: step }))
   }
 
   // ─── Phase flow ───────────────────────────────────────────────────────────────
 
   async function initPhase0() {
+    const firstName = userName ? userName.trim().split(/\s+/)[0] : ''
     await biaSay(
-      `Olá${userName ? `, ${userName}` : ''}! Seja bem-vindo ao MeuDIA — organizado e priorizado. Todo dia.\n\nNosso objetivo é te auxiliar a organizar sua agenda, minimizando distrações e tarefas que tiram o seu foco e concentração.\n\nAntes de iniciarmos a configuração, você tem alguma dúvida?`,
+      `Olá${firstName ? `, ${firstName}` : ''}! Tudo bem? É a BIA, e agora vou te guiar na configuração do MeuDIA.`,
       undefined,
       600
+    )
+    await biaSay(
+      'Nosso objetivo é te auxiliar a organizar sua agenda, minimizando distrações e tarefas que tiram o seu foco e concentração. Antes de iniciarmos, você tem alguma dúvida?',
+      undefined,
+      700
     )
     setPhase(0)
     setQuickReplies([{ label: 'Por ora não →', action: skipToPhase1 }])
