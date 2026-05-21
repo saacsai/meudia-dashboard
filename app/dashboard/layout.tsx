@@ -45,6 +45,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     })
   }, [])
 
+  useEffect(() => {
+    function onNameChange(e: CustomEvent<string>) {
+      setAssistantName(e.detail)
+    }
+    window.addEventListener('assistantNameChanged', onNameChange as EventListener)
+    return () => window.removeEventListener('assistantNameChanged', onNameChange as EventListener)
+  }, [])
+
   const NAV = [
     { href: '/dashboard',               label: 'Meu Dia',       icon: '◈' },
     { href: '/dashboard/assistente',    label: assistantName,   icon: '✦' },

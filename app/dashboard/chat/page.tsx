@@ -11,7 +11,7 @@ export default function ChatPage() {
       conversasPath="/api/assistente/conversas"
       headerName="BIA"
       headerSubtitle="Assistente MeuDIA"
-      welcomeMessage="Olá! Sou a BIA, sua assistente no MeuDIA. Posso ajudar você a gerenciar seus contatos, consultar a fila de mensagens, criar grupos e muito mais. O que você precisa hoje?"
+      welcomeMessage="Olá! Sou a BIA. Estou aqui para tirar suas dúvidas sobre como usar o MeuDIA — configurações, funcionalidades, o que cada coisa faz. O que você quer saber?"
     />
   )
 }

@@ -226,6 +226,9 @@ function AssistenteSection() {
     setSaving(true)
     const supabase = getSupabase()
     await supabase.from('instances').update(form).eq('id', instance.id)
+    if (form.persona_name) {
+      window.dispatchEvent(new CustomEvent('assistantNameChanged', { detail: form.persona_name }))
+    }
     setSaving(false); setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }

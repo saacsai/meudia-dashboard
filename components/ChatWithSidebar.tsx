@@ -99,7 +99,7 @@ function ConversationItem({
         <span
           className="flex-1 text-xs truncate"
           style={{ color: active ? PRIMARY : '#374151' }}
-          onDoubleClick={e => { e.stopPropagation(); setDraft(conv.title); setEditing(true) }}
+          onClick={e => { e.stopPropagation(); onSelect(); setDraft(conv.title); setEditing(true) }}
         >
           {conv.title}
         </span>
@@ -441,7 +441,7 @@ export default function ChatWithSidebar({
             </button>
           </div>
           <p className="text-[11px] text-gray-400 mt-1.5 text-center">
-            Shift+Enter para nova linha · Enter para enviar · Duplo clique no título para renomear
+            Shift+Enter para nova linha · Enter para enviar · Clique no título para renomear
           </p>
         </div>
       </div>
