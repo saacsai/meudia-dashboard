@@ -4,6 +4,12 @@ import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import ChatWithSidebar from '@/components/ChatWithSidebar'
 
+// Nomes terminados em 'A' são tratados como femininos (MAIA, BIA, OLIVIA, SOFIA…).
+// Todo o resto é masculino (ZEUS, ADONAI, THOR…).
+function isFeminine(name: string): boolean {
+  return name.trim().toUpperCase().endsWith('A')
+}
+
 export default function AssistentePage() {
   const [assistantName, setAssistantName] = useState<string | null>(null)
 
@@ -31,6 +37,12 @@ export default function AssistentePage() {
     )
   }
 
+  const fem = isFeminine(assistantName)
+  const artigo = fem ? 'a' : 'o'
+  const possessivo = fem ? 'sua' : 'seu'
+  const subtitulo = fem ? 'Sua assistente pessoal' : 'Seu assistente pessoal'
+  const welcomeMessage = `Olá! Sou ${artigo} ${assistantName}, ${possessivo} assistente no MeuDIA. Posso ajudar você a gerenciar seus contatos, consultar a fila de mensagens, criar grupos e muito mais. O que você precisa hoje?`
+
   return (
     <ChatWithSidebar
       chatSource="olivia"
@@ -38,8 +50,8 @@ export default function AssistentePage() {
       historyPath="/api/assistente/olivia/historico"
       conversasPath="/api/assistente/conversas"
       headerName={assistantName}
-      headerSubtitle="Sua assistente pessoal"
-      welcomeMessage={`Olá! Sou ${assistantName}, sua assistente pessoal. Como posso ajudar você hoje?`}
+      headerSubtitle={subtitulo}
+      welcomeMessage={welcomeMessage}
       configLink="/dashboard/configuracoes"
     />
   )
