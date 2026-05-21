@@ -427,7 +427,7 @@ function MemoriasSection() {
     return (
       <p className="text-sm text-gray-400 text-center py-4">
         Nenhuma memória salva ainda.<br />
-        <span className="text-xs">Diga para a assistente "lembra que o Anderson é sócio" para ela começar a guardar contexto.</span>
+        <span className="text-xs">Diga para a assistente &ldquo;lembra que o Anderson é sócio&rdquo; para ela começar a guardar contexto.</span>
       </p>
     )
   }
