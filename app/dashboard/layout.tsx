@@ -37,15 +37,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         session.user.email?.split('@')[0] ||
         ''
       )
-      const { data: rows } = await supabase
+      let { data: rows } = await supabase
         .from('instances')
         .select('persona_name, onboarding_completed, onboarding_step')
         .eq('user_id', session.user.id)
         .eq('active', true)
         .limit(1)
+
+      // Novo usuário sem instância: cria via setup e retorna ao onboarding
+      if (!rows || rows.length === 0) {
+        const res = await fetch('/api/auth/setup', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${session.access_token}` },
+        })
+        if (res.ok) {
+          const inst = await res.json()
+          rows = [inst]
+        }
+      }
+
       if (rows?.[0]) {
         if (rows[0].persona_name) setAssistantName(rows[0].persona_name)
-        setOnboardingCompleted(rows[0].onboarding_completed ?? true)
+        setOnboardingCompleted(rows[0].onboarding_completed ?? false)
         setOnboardingStep(rows[0].onboarding_step ?? 0)
       }
       setLoading(false)
