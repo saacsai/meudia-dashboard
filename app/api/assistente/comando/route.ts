@@ -140,12 +140,32 @@ async function executeTool(name: string, args: ToolArgs, instanceId: string): Pr
   }
 
   if (name === 'buscar_contatos') {
-    const { data } = await supabase
+    const rawQuery = String(args.query).trim()
+
+    // Tenta busca exata primeiro
+    const { data: exact } = await supabase
       .from('contacts')
       .select('id, name, remote_jid, priority')
       .eq('instance_id', instanceId)
-      .ilike('name', `%${args.query}%`)
+      .ilike('name', `%${rawQuery}%`)
       .limit(5)
+
+    // Se não achou, busca por cada palavra individualmente (OR)
+    let data = exact
+    if (!data?.length) {
+      const words = rawQuery.split(/\s+/).filter(w => w.length >= 3)
+      if (words.length > 0) {
+        const orFilter = words.map(w => `name.ilike.%${w}%`).join(',')
+        const { data: partial } = await supabase
+          .from('contacts')
+          .select('id, name, remote_jid, priority')
+          .eq('instance_id', instanceId)
+          .or(orFilter)
+          .limit(8)
+        data = partial
+      }
+    }
+
     if (!data?.length) return { encontrados: [], aviso: 'Nenhum contato encontrado.' }
     return {
       encontrados: data.map(c => ({
