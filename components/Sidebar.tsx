@@ -17,6 +17,16 @@ export interface NavItem {
   icon: string
 }
 
+// Durante o onboarding, cada item do nav desbloqueia num step específico.
+// -1 = sempre acessível | 4 = só após completar o onboarding
+const UNLOCK_AT: Record<string, number> = {
+  '/dashboard/chat':          -1,
+  '/dashboard/contatos':       1,
+  '/dashboard':                2,
+  '/dashboard/assistente':     3,
+  '/dashboard/configuracoes':  4,
+}
+
 interface Props {
   logoSrc: string
   productName: string
@@ -27,6 +37,8 @@ interface Props {
   onLogout: () => void
   onEditarPerfil: () => void
   onGerenciarPlano: () => void
+  onboardingStep?: number
+  onboardingCompleted?: boolean
 }
 
 function initials(nome: string) {
@@ -43,6 +55,8 @@ export default function Sidebar({
   onLogout,
   onEditarPerfil,
   onGerenciarPlano,
+  onboardingStep = 4,
+  onboardingCompleted = true,
 }: Props) {
   const pathname = usePathname()
 
@@ -67,6 +81,23 @@ export default function Sidebar({
       <nav className="flex-1 px-2 py-1 overflow-y-auto space-y-0.5">
         {navItems.map(item => {
           const active = pathname === item.href
+          const unlockAt = UNLOCK_AT[item.href] ?? 4
+          const locked = !onboardingCompleted && onboardingStep < unlockAt
+          const done = !onboardingCompleted && onboardingStep >= unlockAt && unlockAt >= 0
+
+          if (locked) {
+            return (
+              <div
+                key={item.href}
+                className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm select-none"
+                style={{ color: '#d1d5db', cursor: 'default' }}
+              >
+                <span className="text-base leading-none opacity-40">{item.icon}</span>
+                <span className="opacity-40">{item.label}</span>
+              </div>
+            )
+          }
+
           return (
             <Link
               key={item.href}
@@ -74,12 +105,17 @@ export default function Sidebar({
               className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm transition-colors"
               style={{
                 backgroundColor: active ? `${primaryColor}18` : 'transparent',
-                color: active ? primaryColor : '#6b7280',
-                fontWeight: active ? 600 : 400,
+                color: active ? primaryColor : done ? '#374151' : '#6b7280',
+                fontWeight: active ? 600 : done ? 500 : 400,
               }}
             >
               <span className="text-base leading-none">{item.icon}</span>
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              {done && (
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ color: primaryColor }}>
+                  <polyline points="1.5 6 4.5 9 10.5 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
             </Link>
           )
         })}
