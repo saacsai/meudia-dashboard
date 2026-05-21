@@ -355,19 +355,25 @@ export async function callGemini(
   }
 
   const parts: GeminiPart[] = json.candidates?.[0]?.content?.parts ?? []
-  const fnCall = parts.find(
+  const fnCalls = parts.filter(
     (p): p is { functionCall: { name: string; args: ToolArgs } } => 'functionCall' in p
   )
 
-  if (fnCall && depth < 12) {
-    const { name, args } = fnCall.functionCall
-    toolsUsed.push({ tool: name, args })
-    const result = await executeTool(name, args, instanceId, supabase)
+  if (fnCalls.length > 0 && depth < 12) {
+    // Execute all function calls from this turn in parallel
+    const results = await Promise.all(
+      fnCalls.map(fc => executeTool(fc.functionCall.name, fc.functionCall.args, instanceId, supabase))
+    )
+    fnCalls.forEach((fc, i) => {
+      toolsUsed.push({ tool: fc.functionCall.name, args: fc.functionCall.args })
+      void results[i] // already executed above
+    })
+
     const next = await callGemini(
       [
         ...contents,
-        { role: 'model', parts: [{ functionCall: fnCall.functionCall }] },
-        { role: 'user', parts: [{ functionResponse: { name, response: result } }] }
+        { role: 'model', parts: fnCalls.map(fc => ({ functionCall: fc.functionCall })) },
+        { role: 'user', parts: fnCalls.map((fc, i) => ({ functionResponse: { name: fc.functionCall.name, response: results[i] } })) }
       ],
       system, instanceId, supabase, depth + 1
     )
