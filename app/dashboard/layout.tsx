@@ -44,23 +44,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         .eq('active', true)
         .limit(1)
 
-      // Novo usuário sem instância: cria via setup e retorna ao onboarding
+      // Novo usuário sem instância: cria via setup e envia direto ao onboarding
       if (!rows || rows.length === 0) {
-        const res = await fetch('/api/auth/setup', {
+        await fetch('/api/auth/setup', {
           method: 'POST',
           headers: { authorization: `Bearer ${session.access_token}` },
         })
-        if (res.ok) {
-          const inst = await res.json()
-          rows = [inst]
-        }
+        // Independente do retorno do setup, é um novo usuário — onboarding obrigatório
+        setOnboardingCompleted(false)
+        setOnboardingStep(0)
+        setLoading(false)
+        return
       }
 
-      if (rows?.[0]) {
-        if (rows[0].persona_name) setAssistantName(rows[0].persona_name)
-        setOnboardingCompleted(rows[0].onboarding_completed ?? false)
-        setOnboardingStep(rows[0].onboarding_step ?? 0)
-      }
+      if (rows[0].persona_name) setAssistantName(rows[0].persona_name)
+      setOnboardingCompleted(rows[0].onboarding_completed ?? false)
+      setOnboardingStep(rows[0].onboarding_step ?? 0)
       setLoading(false)
     })
   }, [])
