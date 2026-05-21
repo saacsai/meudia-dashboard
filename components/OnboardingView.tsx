@@ -422,13 +422,17 @@ export default function OnboardingView({ userName, initialStep, onComplete }: On
   }
 
   async function advanceStep(step: number) {
-    const token = await getToken()
-    await fetch('/api/onboarding/step', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ step })
-    })
-    window.dispatchEvent(new CustomEvent('onboardingStepChanged', { detail: step }))
+    try {
+      const token = await getToken()
+      await fetch('/api/onboarding/step', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ step })
+      })
+      window.dispatchEvent(new CustomEvent('onboardingStepChanged', { detail: step }))
+    } catch {
+      // non-blocking — onboarding continues even if DB update fails
+    }
   }
 
   // ─── Phase flow ───────────────────────────────────────────────────────────────
@@ -469,34 +473,50 @@ export default function OnboardingView({ userName, initialStep, onComplete }: On
   }
 
   async function handleWhatsAppConnected() {
-    await advanceStep(2)
-    await biaSay('WhatsApp conectado com sucesso! ✓', undefined, 400)
-    await biaSay('Seus contatos aparecem automaticamente conforme as mensagens chegam. Você pode organizá-los na aba Contatos ou pedir à sua assistente depois.')
-    await biaSay(undefined, 'contacts', 300)
-    setPhase(3)
-    setQuickReplies([{ label: 'Entendido →', action: startPhase4 }])
+    try {
+      await advanceStep(2)
+      await biaSay('WhatsApp conectado com sucesso! ✓', undefined, 400)
+      await biaSay('Seus contatos aparecem automaticamente conforme as mensagens chegam. Você pode organizá-los na aba Contatos ou pedir à sua assistente depois.')
+      await biaSay(undefined, 'contacts', 300)
+      setPhase(3)
+      setQuickReplies([{ label: 'Entendido →', action: startPhase4 }])
+    } catch {
+      await biaSay('Ops, algo deu errado. Recarregue a página e tente novamente.')
+    }
   }
 
   async function startPhase4() {
-    setQuickReplies([])
-    userSay('Entendido →')
-    await advanceStep(3)
-    await biaSay('Configure suas janelas de resposta — os momentos do dia em que você abre o WhatsApp. Fora delas, o WhatsApp não existe para você.')
-    await biaSay(undefined, 'digest', 400)
-    setPhase(4)
+    try {
+      setQuickReplies([])
+      userSay('Entendido →')
+      await advanceStep(3)
+      await biaSay('Configure suas janelas de resposta — os momentos do dia em que você abre o WhatsApp. Fora delas, o WhatsApp não existe para você.')
+      await biaSay(undefined, 'digest', 400)
+      setPhase(4)
+    } catch {
+      await biaSay('Ops, algo deu errado. Recarregue a página e tente novamente.')
+    }
   }
 
   async function handleDigestSaved() {
-    await biaSay('Janelas salvas! ✓', undefined, 400)
-    await biaSay('Última etapa! Vamos configurar sua assistente pessoal.')
-    await biaSay('Eu, BIA, sou a assistente do produto — estou na aba Dúvidas para qualquer coisa sobre o sistema. Sua assistente pessoal terá o nome e a personalidade que você definir.', undefined, 600)
-    await biaSay(undefined, 'assistente', 400)
-    setPhase(5)
+    try {
+      await biaSay('Janelas salvas! ✓', undefined, 400)
+      await biaSay('Última etapa! Vamos configurar sua assistente pessoal.')
+      await biaSay('Eu, BIA, sou a assistente do produto — estou na aba Dúvidas para qualquer coisa sobre o sistema. Sua assistente pessoal terá o nome e a personalidade que você definir.', undefined, 600)
+      await biaSay(undefined, 'assistente', 400)
+      setPhase(5)
+    } catch {
+      await biaSay('Ops, algo deu errado. Recarregue a página e tente novamente.')
+    }
   }
 
   async function handleAssistanteComplete(name: string) {
-    await biaSay(`Perfeito! ${name} está pronta para trabalhar. Bem-vindo ao MeuDIA!`, undefined, 400)
-    onComplete(name)
+    try {
+      await biaSay(`Perfeito! ${name} está pronta para trabalhar. Bem-vindo ao MeuDIA!`, undefined, 400)
+      onComplete(name)
+    } catch {
+      onComplete(name)
+    }
   }
 
   // Keep refs current on every render
