@@ -21,6 +21,7 @@ const TOOL_LABELS: Record<string, string> = {
   criar_grupo: 'Criou grupo',
   adicionar_ao_grupo: 'Adicionou ao grupo',
   listar_grupos: 'Listou grupos',
+  criar_contato: 'Cadastrou contato',
 }
 
 const WELCOME: Message = {

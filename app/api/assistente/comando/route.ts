@@ -93,6 +93,19 @@ const TOOL_DECLARATIONS = [
   {
     name: 'listar_grupos',
     description: 'Lista os grupos de contatos existentes. Use antes de adicionar_ao_grupo para obter o group_id.'
+  },
+  {
+    name: 'criar_contato',
+    description: 'Cadastra um novo contato com nome e número de WhatsApp.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        name: { type: 'STRING', description: 'Nome do contato' },
+        phone: { type: 'STRING', description: 'Número no formato internacional sem + nem espaços, ex: 5511999990000' },
+        priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'], description: 'Prioridade inicial (padrão: normal)' }
+      },
+      required: ['name', 'phone']
+    }
   }
 ]
 
@@ -203,6 +216,28 @@ async function executeTool(name: string, args: ToolArgs, instanceId: string): Pr
       .eq('instance_id', instanceId)
       .order('name')
     return { grupos: data ?? [] }
+  }
+
+  if (name === 'criar_contato') {
+    const phone = String(args.phone).replace(/\D/g, '')
+    if (!phone) return { sucesso: false, erro: 'Número inválido.' }
+    const remoteJid = `${phone}@s.whatsapp.net`
+    const { data, error } = await supabase
+      .from('contacts')
+      .insert({
+        instance_id: instanceId,
+        name: String(args.name),
+        remote_jid: remoteJid,
+        priority: (args.priority as string) || 'normal',
+        classified_manually: true
+      })
+      .select('id, name, remote_jid, priority')
+      .single()
+    if (error) {
+      if (error.code === '23505') return { sucesso: false, erro: 'Já existe um contato com esse número.' }
+      return { sucesso: false, erro: error.message }
+    }
+    return { sucesso: true, id: data.id, nome: data.name, numero: phone, prioridade: data.priority }
   }
 
   return { erro: `Ferramenta desconhecida: ${name}` }
