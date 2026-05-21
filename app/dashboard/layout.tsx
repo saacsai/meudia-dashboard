@@ -9,15 +9,6 @@ import GerenciarPlanoPage from '@/components/GerenciarPlanoPage'
 
 const PRIMARY = '#2A5F6B'
 
-const NAV = [
-  { href: '/dashboard/chat',       label: 'BIA',        icon: '◈' },
-  { href: '/dashboard',            label: 'Início',     icon: '⊞' },
-  { href: '/dashboard/conectar',   label: 'WhatsApp',   icon: '◉' },
-  { href: '/dashboard/assistente', label: 'Assistente', icon: '✦' },
-  { href: '/dashboard/contatos',   label: 'Contatos',   icon: '☰' },
-  { href: '/dashboard/digest',     label: 'Digest',     icon: '◷' },
-]
-
 type View = 'main' | 'perfil' | 'plano'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -25,27 +16,42 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [loading, setLoading] = useState(true)
   const [userName, setUserName] = useState('')
   const [userEmail, setUserEmail] = useState('')
+  const [assistantName, setAssistantName] = useState('Assistente')
   const [view, setView] = useState<View>('main')
 
-  // Fecha perfil/plano ao navegar entre páginas
   useEffect(() => { setView('main') }, [pathname])
 
   useEffect(() => {
     const supabase = getSupabase()
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) {
         window.location.href = '/login'
-      } else {
-        setUserEmail(session.user.email || '')
-        setUserName(
-          session.user.user_metadata?.full_name ||
-          session.user.email?.split('@')[0] ||
-          ''
-        )
-        setLoading(false)
+        return
       }
+      setUserEmail(session.user.email || '')
+      setUserName(
+        session.user.user_metadata?.full_name ||
+        session.user.email?.split('@')[0] ||
+        ''
+      )
+      const { data: rows } = await supabase
+        .from('instances')
+        .select('persona_name')
+        .eq('user_id', session.user.id)
+        .eq('active', true)
+        .limit(1)
+      if (rows?.[0]?.persona_name) setAssistantName(rows[0].persona_name)
+      setLoading(false)
     })
   }, [])
+
+  const NAV = [
+    { href: '/dashboard',               label: 'Meu Dia',       icon: '◈' },
+    { href: '/dashboard/assistente',    label: assistantName,   icon: '✦' },
+    { href: '/dashboard/contatos',      label: 'Contatos',      icon: '☰' },
+    { href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙' },
+    { href: '/dashboard/chat',          label: 'Dúvidas',       icon: '?' },
+  ]
 
   async function handleLogout() {
     const supabase = getSupabase()

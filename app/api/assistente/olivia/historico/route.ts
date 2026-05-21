@@ -22,21 +22,28 @@ export async function GET(req: NextRequest) {
 
   const { data: instances } = await supabase
     .from('instances')
-    .select('id')
+    .select('id, persona_name, persona_tone, persona_response_size')
     .eq('user_id', user.id)
     .eq('active', true)
     .limit(1)
 
   const inst = instances?.[0] ?? null
-  if (!inst) return NextResponse.json([])
+  if (!inst) return NextResponse.json({ messages: [], persona: null })
 
   const { data } = await supabase
     .from('assistant_messages')
     .select('id, role, content, tool_calls, created_at')
     .eq('instance_id', inst.id)
-    .eq('chat_source', 'bia')
+    .eq('chat_source', 'olivia')
     .order('created_at', { ascending: true })
     .limit(50)
 
-  return NextResponse.json(data || [])
+  return NextResponse.json({
+    messages: data || [],
+    persona: {
+      name: inst.persona_name,
+      tone: inst.persona_tone,
+      responseSize: inst.persona_response_size,
+    }
+  })
 }

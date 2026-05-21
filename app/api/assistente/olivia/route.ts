@@ -16,63 +16,61 @@ function db() {
 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`
 
-// ─── Tool declarations ────────────────────────────────────────────────────────
-
 const TOOL_DECLARATIONS = [
   {
     name: 'listar_contatos',
-    description: 'Lista contatos com filtro opcional por prioridade. Use para responder "quais são meus contatos prioritários/silenciados/normais" ou "lista todos os contatos".',
+    description: 'Lista contatos com filtro opcional por prioridade.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'], description: 'Filtrar por prioridade. Omitir para listar todos.' },
-        limit: { type: 'NUMBER', description: 'Máximo de contatos a retornar (padrão 20)' }
+        priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'] },
+        limit: { type: 'NUMBER' }
       }
     }
   },
   {
     name: 'buscar_contatos',
-    description: 'Busca contatos pelo nome ou trecho do número. Use sempre antes de definir_prioridade ou adicionar_ao_grupo para obter o ID correto.',
+    description: 'Busca contatos pelo nome ou trecho do número. Use antes de definir_prioridade ou adicionar_ao_grupo.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        query: { type: 'STRING', description: 'Nome ou trecho do número do contato' }
+        query: { type: 'STRING' }
       },
       required: ['query']
     }
   },
   {
     name: 'definir_prioridade',
-    description: 'Define a prioridade de um contato: priority (prioritário/urgente), normal ou muted (silenciado).',
+    description: 'Define a prioridade de um contato: priority, normal ou muted.',
     parameters: {
       type: 'OBJECT',
       properties: {
         contact_id: { type: 'STRING' },
         priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'] },
-        contact_name: { type: 'STRING', description: 'Nome do contato para confirmar na resposta' }
+        contact_name: { type: 'STRING' }
       },
       required: ['contact_id', 'priority']
     }
   },
   {
     name: 'consultar_fila',
-    description: 'Retorna as mensagens pendentes na fila (não enviadas ao digest ainda).',
+    description: 'Retorna as mensagens pendentes na fila.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        limit: { type: 'NUMBER', description: 'Máximo de mensagens a retornar (padrão 8)' }
+        limit: { type: 'NUMBER' }
       }
     }
   },
   {
     name: 'criar_grupo',
-    description: 'Cria um novo grupo de contatos para organizar por projeto ou contexto.',
+    description: 'Cria um novo grupo de contatos.',
     parameters: {
       type: 'OBJECT',
       properties: {
         name: { type: 'STRING' },
         description: { type: 'STRING' },
-        color: { type: 'STRING', description: 'Cor hex, ex: #3b82f6' }
+        color: { type: 'STRING' }
       },
       required: ['name']
     }
@@ -92,24 +90,22 @@ const TOOL_DECLARATIONS = [
   },
   {
     name: 'listar_grupos',
-    description: 'Lista os grupos de contatos existentes. Use antes de adicionar_ao_grupo para obter o group_id.'
+    description: 'Lista os grupos de contatos. Use antes de adicionar_ao_grupo para obter o group_id.'
   },
   {
     name: 'criar_contato',
-    description: 'Cadastra um novo contato com nome e número de WhatsApp.',
+    description: 'Cadastra um novo contato.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        name: { type: 'STRING', description: 'Nome do contato' },
-        phone: { type: 'STRING', description: 'Número no formato internacional sem + nem espaços, ex: 5511999990000' },
-        priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'], description: 'Prioridade inicial (padrão: normal)' }
+        name: { type: 'STRING' },
+        phone: { type: 'STRING' },
+        priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'] }
       },
       required: ['name', 'phone']
     }
   }
 ]
-
-// ─── Tool execution ───────────────────────────────────────────────────────────
 
 type ToolArgs = Record<string, unknown>
 type ToolResult = Record<string, unknown>
@@ -128,29 +124,17 @@ async function executeTool(name: string, args: ToolArgs, instanceId: string): Pr
     if (args.priority) query = query.eq('priority', args.priority)
     const { data } = await query
     if (!data?.length) return { total: 0, contatos: [], aviso: 'Nenhum contato encontrado.' }
-    return {
-      total: data.length,
-      contatos: data.map(c => ({
-        id: c.id,
-        nome: c.name,
-        numero: c.remote_jid.replace('@s.whatsapp.net', ''),
-        prioridade: c.priority
-      }))
-    }
+    return { total: data.length, contatos: data.map(c => ({ id: c.id, nome: c.name, numero: c.remote_jid.replace('@s.whatsapp.net', ''), prioridade: c.priority })) }
   }
 
   if (name === 'buscar_contatos') {
     const rawQuery = String(args.query).trim()
-
-    // Tenta busca exata primeiro
     const { data: exact } = await supabase
       .from('contacts')
       .select('id, name, remote_jid, priority')
       .eq('instance_id', instanceId)
       .ilike('name', `%${rawQuery}%`)
       .limit(5)
-
-    // Se não achou, busca por cada palavra individualmente (OR)
     let data = exact
     if (!data?.length) {
       const words = rawQuery.split(/\s+/).filter(w => w.length >= 3)
@@ -165,16 +149,8 @@ async function executeTool(name: string, args: ToolArgs, instanceId: string): Pr
         data = partial
       }
     }
-
     if (!data?.length) return { encontrados: [], aviso: 'Nenhum contato encontrado.' }
-    return {
-      encontrados: data.map(c => ({
-        id: c.id,
-        nome: c.name,
-        numero: c.remote_jid.replace('@s.whatsapp.net', ''),
-        prioridade: c.priority
-      }))
-    }
+    return { encontrados: data.map(c => ({ id: c.id, nome: c.name, numero: c.remote_jid.replace('@s.whatsapp.net', ''), prioridade: c.priority })) }
   }
 
   if (name === 'definir_prioridade') {
@@ -203,12 +179,7 @@ async function executeTool(name: string, args: ToolArgs, instanceId: string): Pr
   if (name === 'criar_grupo') {
     const { data, error } = await supabase
       .from('contact_groups')
-      .insert({
-        instance_id: instanceId,
-        name: String(args.name),
-        description: args.description ? String(args.description) : null,
-        color: args.color ? String(args.color) : '#6b7280'
-      })
+      .insert({ instance_id: instanceId, name: String(args.name), description: args.description ? String(args.description) : null, color: args.color ? String(args.color) : '#6b7280' })
       .select('id, name')
       .single()
     if (error) {
@@ -241,16 +212,9 @@ async function executeTool(name: string, args: ToolArgs, instanceId: string): Pr
   if (name === 'criar_contato') {
     const phone = String(args.phone).replace(/\D/g, '')
     if (!phone) return { sucesso: false, erro: 'Número inválido.' }
-    const remoteJid = `${phone}@s.whatsapp.net`
     const { data, error } = await supabase
       .from('contacts')
-      .insert({
-        instance_id: instanceId,
-        name: String(args.name),
-        remote_jid: remoteJid,
-        priority: (args.priority as string) || 'normal',
-        classified_manually: true
-      })
+      .insert({ instance_id: instanceId, name: String(args.name), remote_jid: `${phone}@s.whatsapp.net`, priority: (args.priority as string) || 'normal', classified_manually: true })
       .select('id, name, remote_jid, priority')
       .single()
     if (error) {
@@ -263,15 +227,12 @@ async function executeTool(name: string, args: ToolArgs, instanceId: string): Pr
   return { erro: `Ferramenta desconhecida: ${name}` }
 }
 
-// ─── Gemini multi-turn with tools ─────────────────────────────────────────────
-
 type GeminiPart =
   | { text: string }
   | { functionCall: { name: string; args: ToolArgs } }
   | { functionResponse: { name: string; response: ToolResult } }
 
 type GeminiContent = { role: string; parts: GeminiPart[] }
-
 type ToolUsed = { tool: string; args: ToolArgs }
 
 async function callGemini(
@@ -308,16 +269,9 @@ async function callGemini(
     const { name, args } = fnCall.functionCall
     toolsUsed.push({ tool: name, args })
     const result = await executeTool(name, args, instanceId)
-
     const next = await callGemini(
-      [
-        ...contents,
-        { role: 'model', parts: [{ functionCall: fnCall.functionCall }] },
-        { role: 'user', parts: [{ functionResponse: { name, response: result } }] }
-      ],
-      system,
-      instanceId,
-      depth + 1
+      [...contents, { role: 'model', parts: [{ functionCall: fnCall.functionCall }] }, { role: 'user', parts: [{ functionResponse: { name, response: result } }] }],
+      system, instanceId, depth + 1
     )
     return { text: next.text, toolsUsed: [...toolsUsed, ...next.toolsUsed] }
   }
@@ -325,8 +279,6 @@ async function callGemini(
   const textPart = parts.find((p): p is { text: string } => 'text' in p)
   return { text: textPart?.text ?? 'Feito.', toolsUsed }
 }
-
-// ─── Route ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   const user = await getAuthUser(req)
@@ -339,7 +291,7 @@ export async function POST(req: NextRequest) {
 
   const { data: instances } = await supabase
     .from('instances')
-    .select('id')
+    .select('id, persona_name, persona_tone, persona_response_size, persona_description')
     .eq('user_id', user.id)
     .eq('active', true)
     .limit(1)
@@ -355,12 +307,26 @@ export async function POST(req: NextRequest) {
 
   const fullName = profile?.full_name || user.email?.split('@')[0] || 'usuário'
   const userName = fullName.split(' ')[0]
+  const assistantName = inst.persona_name || 'Assistente'
+
+  const toneMap: Record<string, string> = {
+    formal: 'formal e preciso, usa linguagem corporativa',
+    profissional: 'profissional e eficiente, direto ao ponto',
+    descontraido: 'descontraído e próximo, comunicação leve',
+    amigavel: 'amigável e caloroso, cria conexão'
+  }
+  const sizeMap: Record<string, string> = {
+    curto: 'respostas curtas e objetivas',
+    detalhado: 'respostas completas e detalhadas'
+  }
+  const tone = toneMap[inst.persona_tone] || 'profissional'
+  const size = sizeMap[inst.persona_response_size] || 'respostas curtas'
 
   const { data: historyRows } = await supabase
     .from('assistant_messages')
     .select('role, content')
     .eq('instance_id', inst.id)
-    .eq('chat_source', 'bia')
+    .eq('chat_source', 'olivia')
     .order('created_at', { ascending: false })
     .limit(10)
 
@@ -368,25 +334,30 @@ export async function POST(req: NextRequest) {
     .reverse()
     .map(r => ({ role: r.role === 'assistant' ? 'model' : 'user', parts: [{ text: r.content }] }))
 
-  const system = `Você é a BIA — assistente pessoal de ${userName} no MeuDIA.
+  const personaBase = inst.persona_description
+    ? inst.persona_description
+    : `Sou ${assistantName}, assistente pessoal de ${userName}.`
 
-CONTEXTO:
-O MeuDIA está respondendo o WhatsApp de ${userName} enquanto ele foca no que importa.
-Aqui no dashboard, você é o canal direto dele com o sistema — sem precisar abrir o WhatsApp.
+  const system = `Você é ${assistantName} — assistente pessoal de ${userName} no MeuDIA.
 
-SUA PERSONALIDADE:
-- Calorosa e próxima, mas sem exagero. Fala como uma assistente experiente que já conhece bem o ${userName}.
-- Direta: vai direto ao ponto, sem enrolação, sem floreios corporativos.
-- Quando executa uma ação, confirma de forma natural — não mecanicamente.
-- Usa o nome ${userName} com naturalidade quando fizer sentido, não em toda frase.
-- Nunca termina com "Posso ajudar em mais alguma coisa?" ou frases de atendente de call center.
+${personaBase}
+
+Tom: ${tone}.
+Formato: ${size}.
+
+O MeuDIA está gerenciando o WhatsApp de ${userName} enquanto ele foca no que importa.
+
+COMO VOCÊ AGE:
+- Use o nome ${userName} com naturalidade, não em toda frase.
+- Confirme ações de forma natural — nunca mecanicamente.
+- Nunca termine com "Posso ajudar em mais alguma coisa?" ou frases de atendente.
+- Quando executar múltiplas ações, confirme todas de uma vez ao final.
 
 O QUE VOCÊ FAZ (use as ferramentas disponíveis):
-- Buscar contatos pelo nome antes de executar qualquer ação sobre eles
-- Definir prioridade de contatos: prioritário, normal ou silenciado
+- Buscar, listar e cadastrar contatos
+- Definir prioridade de contatos
 - Consultar a fila de mensagens acumuladas
-- Criar e listar grupos de contatos por projeto ou contexto
-- Adicionar contatos a grupos
+- Criar, listar grupos e adicionar contatos a grupos
 
 Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`
 
@@ -398,8 +369,8 @@ Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' 
   const { text, toolsUsed } = await callGemini(contents, system, inst.id)
 
   await supabase.from('assistant_messages').insert([
-    { instance_id: inst.id, role: 'user', content: message.trim(), chat_source: 'bia' },
-    { instance_id: inst.id, role: 'assistant', content: text, tool_calls: toolsUsed.length ? toolsUsed : null, chat_source: 'bia' }
+    { instance_id: inst.id, role: 'user', content: message.trim(), chat_source: 'olivia' },
+    { instance_id: inst.id, role: 'assistant', content: text, tool_calls: toolsUsed.length ? toolsUsed : null, chat_source: 'olivia' }
   ])
 
   return NextResponse.json({ response: text, toolsUsed })

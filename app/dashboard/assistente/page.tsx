@@ -1,358 +1,235 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 
 const PRIMARY = '#2A5F6B'
 
-interface Instance {
-  id: string
-  persona_name: string
-  persona_tone: string
-  persona_response_size: string
-  persona_description: string | null
-  response_hint: string | null
+interface Message {
+  id?: string
+  role: 'user' | 'assistant'
+  content: string
+  toolsUsed?: Array<{ tool: string; args: Record<string, unknown> }>
 }
 
 interface Persona {
-  id: string
   name: string
-  tagline: string
-  description: string
-  summary: string
-  avatar: string
-  avatarBg: string
-  persona_tone: string
-  persona_response_size: string
-  persona_description: string
-  response_hint: string
-  recommended?: boolean
+  tone: string
+  responseSize: string
 }
 
-const PERSONAS: Persona[] = [
-  {
-    id: 'BIA',
-    name: 'BIA',
-    tagline: 'Jovial e próxima',
-    description: 'Comunicação leve, simpática e direta. Ideal para profissionais liberais e pequenos negócios.',
-    summary: 'Ela é jovial e próxima — responde de forma descontraída, com mensagens curtas e uma pitada de simpatia. Perfeita para manter seus contatos por perto sem perder tempo.',
-    avatar: 'B',
-    avatarBg: '#7C3AED',
-    persona_tone: 'descontraido',
-    persona_response_size: 'curto',
-    persona_description: 'Sou a BIA, assistente digital de quem você está tentando falar. Estou aqui para garantir que nenhuma mensagem importante fique sem atenção!',
-    response_hint: 'Retorno em breve! Fico de olho nas mensagens prioritárias.',
-  },
-  {
-    id: 'ADONAI',
-    name: 'ADONAI',
-    tagline: 'Corporativo e preciso',
-    description: 'Linguagem formal e impecável. Para executivos, consultores e advogados.',
-    summary: 'Ele é corporativo e preciso — usa linguagem formal, respostas detalhadas e trata cada interação com discrição. Ideal para quem precisa de uma comunicação executiva impecável.',
-    avatar: 'A',
-    avatarBg: '#1E40AF',
-    persona_tone: 'formal',
-    persona_response_size: 'detalhado',
-    persona_description: 'Sou ADONAI, assistente executivo responsável pela gestão das comunicações. Estou garantindo que suas mensagens sejam tratadas com a devida atenção e prioridade.',
-    response_hint: 'Retorno assim que possível. Mensagens urgentes serão escaladas imediatamente.',
-  },
-  {
-    id: 'MAIA',
-    name: 'MAIA',
-    tagline: 'Equilibrada e profissional',
-    description: 'O ponto certo entre eficiência e cordialidade. Funciona para a maioria dos perfis.',
-    summary: 'Ela é equilibrada e profissional — combina cordialidade com eficiência, respostas diretas e atenção às prioridades. A escolha certa para a maioria dos perfis.',
-    avatar: 'M',
-    avatarBg: '#059669',
-    persona_tone: 'profissional',
-    persona_response_size: 'curto',
-    persona_description: 'Sou MAIA, assistente profissional. Estou gerenciando as mensagens e garantindo que as prioridades sejam atendidas com atenção.',
-    response_hint: 'Retorno em breve. Mensagens urgentes têm prioridade.',
-    recommended: true,
-  },
-  {
-    id: 'custom',
-    name: 'Personalizado',
-    tagline: 'Sua própria marca',
-    description: 'Defina nome, tom e personalidade do seu jeito. Para quem quer identidade própria.',
-    summary: '',
-    avatar: '+',
-    avatarBg: '#9CA3AF',
-    persona_tone: 'profissional',
-    persona_response_size: 'curto',
-    persona_description: '',
-    response_hint: '',
-  },
-]
-
-const PRESET_NAMES = ['BIA', 'ADONAI', 'MAIA']
-
-function detectPersonaId(name: string): string {
-  const upper = name?.toUpperCase()
-  if (PRESET_NAMES.includes(upper)) return upper
-  return 'custom'
+const TOOL_LABELS: Record<string, string> = {
+  listar_contatos: 'Listou contatos',
+  buscar_contatos: 'Buscou contatos',
+  definir_prioridade: 'Ajustou prioridade',
+  consultar_fila: 'Consultou fila',
+  criar_grupo: 'Criou grupo',
+  adicionar_ao_grupo: 'Adicionou ao grupo',
+  listar_grupos: 'Listou grupos',
+  criar_contato: 'Cadastrou contato',
 }
 
-const inputClass = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none transition-colors"
+function buildWelcome(name: string): Message {
+  return {
+    role: 'assistant',
+    content: `Olá! Sou ${name}. Como posso ajudar você hoje?`,
+  }
+}
 
 export default function AssistentePage() {
-  const [instance, setInstance] = useState<Instance | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [selectedPersona, setSelectedPersona] = useState<string | null>(null)
-  const [form, setForm] = useState({
-    persona_name: '',
-    persona_tone: 'profissional',
-    persona_response_size: 'curto',
-    persona_description: '',
-    response_hint: '',
-  })
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(true)
+  const [persona, setPersona] = useState<Persona | null>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => { loadData() }, [])
-
-  async function loadData() {
-    const supabase = getSupabase()
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    const { data } = await supabase
-      .from('instances')
-      .select('id, persona_name, persona_tone, persona_response_size, persona_description, response_hint')
-      .eq('user_id', session.user.id)
-      .eq('active', true)
-      .single()
-    if (data) {
-      setInstance(data)
-      const pid = detectPersonaId(data.persona_name)
-      // Só pré-seleciona se o usuário já escolheu um preset válido antes
-      if (pid !== 'custom') {
-        setSelectedPersona(pid)
-        setForm({
-          persona_name: data.persona_name || '',
-          persona_tone: data.persona_tone || 'profissional',
-          persona_response_size: data.persona_response_size || 'curto',
-          persona_description: data.persona_description || '',
-          response_hint: data.response_hint || '',
-        })
-      }
-    }
-    setLoading(false)
+  async function getToken() {
+    const { data: { session } } = await getSupabase().auth.getSession()
+    return session?.access_token || ''
   }
 
-  function selectPersona(persona: Persona) {
-    setSelectedPersona(persona.id)
-    if (persona.id === 'custom') {
-      setForm(f => ({ ...f, persona_tone: 'profissional', persona_response_size: 'curto' }))
-    } else {
-      setForm({
-        persona_name: persona.name,
-        persona_tone: persona.persona_tone,
-        persona_response_size: persona.persona_response_size,
-        persona_description: persona.persona_description,
-        response_hint: persona.response_hint,
+  useEffect(() => {
+    async function loadHistory() {
+      const token = await getToken()
+      const res = await fetch('/api/assistente/olivia/historico', {
+        headers: { authorization: `Bearer ${token}` }
       })
+      if (!res.ok) { setLoadingHistory(false); return }
+      const data = await res.json()
+      setPersona(data.persona)
+      const msgs: Message[] = data.messages
+      setMessages(msgs.length ? msgs : [buildWelcome(data.persona?.name || 'Assistente')])
+      setLoadingHistory(false)
+    }
+    loadHistory()
+  }, [])
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
+
+  async function send() {
+    const text = input.trim()
+    if (!text || loading) return
+
+    setInput('')
+    setMessages(prev => [...prev, { role: 'user', content: text }])
+    setLoading(true)
+
+    try {
+      const token = await getToken()
+      const res = await fetch('/api/assistente/olivia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message: text })
+      })
+      const data = await res.json()
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: data.response || 'Não consegui processar. Tente novamente.',
+          toolsUsed: data.toolsUsed
+        }
+      ])
+    } catch {
+      setMessages(prev => [
+        ...prev,
+        { role: 'assistant', content: 'Erro ao conectar. Verifique sua conexão e tente novamente.' }
+      ])
+    } finally {
+      setLoading(false)
+      setTimeout(() => inputRef.current?.focus(), 50)
     }
   }
 
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault()
-    if (!instance) return
-    setSaving(true)
-    const supabase = getSupabase()
-    await supabase.from('instances').update(form).eq('id', instance.id)
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+  function handleKey(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      send()
+    }
   }
 
-  const isCustom = selectedPersona === 'custom'
-  const hasSelection = selectedPersona !== null
+  const assistantName = persona?.name || 'Assistente'
 
-  if (loading) return <div className="text-sm text-gray-400">Carregando…</div>
-  if (!instance) return <div className="text-sm text-gray-500">Nenhuma instância encontrada.</div>
+  if (loadingHistory) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-120px)]">
+        <p className="text-sm text-gray-400">Carregando…</p>
+      </div>
+    )
+  }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-5">
-
-      {/* Cards de persona */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <h2 className="text-base font-bold text-gray-900 mb-1">Escolha o perfil do assistente</h2>
-        <p className="text-xs text-gray-500 mb-5">
-          Cada perfil já vem configurado com nome, tom e personalidade. Você pode ajustar depois.
-        </p>
-
-        <div className="grid grid-cols-2 gap-3">
-          {PERSONAS.map(persona => {
-            const active = selectedPersona === persona.id
-            return (
-              <button
-                key={persona.id}
-                type="button"
-                onClick={() => selectPersona(persona)}
-                className="relative text-left p-4 rounded-xl border-2 transition-all"
-                style={{
-                  borderColor: active ? persona.avatarBg : '#e5e7eb',
-                  backgroundColor: active ? `${persona.avatarBg}0d` : 'white',
-                }}
-              >
-                {persona.recommended && (
-                  <span
-                    className="absolute top-3 right-3 text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white"
-                    style={{ backgroundColor: persona.avatarBg }}
-                  >
-                    recomendado
-                  </span>
-                )}
-                {active && (
-                  <span
-                    className="absolute top-3 right-3 w-4 h-4 rounded-full flex items-center justify-center"
-                    style={{ backgroundColor: persona.avatarBg }}
-                  >
-                    <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                      <polyline points="1.5 5 4 7.5 8.5 2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </span>
-                )}
-
-                <div
-                  className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold mb-3"
-                  style={{ backgroundColor: persona.avatarBg }}
-                >
-                  {persona.avatar}
-                </div>
-
-                <p className="text-sm font-bold text-gray-900 leading-tight">{persona.name}</p>
-                <p className="text-xs font-medium mt-0.5" style={{ color: persona.avatarBg }}>{persona.tagline}</p>
-                <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">{persona.description}</p>
-              </button>
-            )
-          })}
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
+      {/* Header */}
+      <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
+        <div
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+          style={{ background: PRIMARY }}
+        >
+          {assistantName.slice(0, 2).toUpperCase()}
         </div>
+        <div>
+          <p className="font-semibold text-gray-800 text-sm">{assistantName}</p>
+          <p className="text-xs text-gray-400">Sua assistente pessoal</p>
+        </div>
+        <a
+          href="/dashboard/configuracoes"
+          className="ml-auto text-xs hover:underline"
+          style={{ color: PRIMARY }}
+        >
+          Configurar →
+        </a>
       </div>
 
-      {/* Prompt quando nada foi selecionado ainda */}
-      {!hasSelection && (
-        <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-6 text-center">
-          <p className="text-sm text-gray-400">← Selecione um perfil acima para continuar</p>
-        </div>
-      )}
-
-      {/* Resumo (presets) ou Formulário (personalizado) */}
-      {hasSelection && <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <form onSubmit={handleSave}>
-          {isCustom ? (
-            <>
-              <h2 className="text-base font-bold text-gray-900 mb-1">Configure seu assistente</h2>
-              <p className="text-xs text-gray-500 mb-5">Defina como ele vai se apresentar e se comportar.</p>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Nome do assistente</label>
-                  <input
-                    type="text"
-                    value={form.persona_name}
-                    onChange={e => setForm(f => ({ ...f, persona_name: e.target.value }))}
-                    placeholder="Ex: LARA, ZEUS, NINA…"
-                    className={inputClass}
-                    onFocus={e => e.target.style.borderColor = PRIMARY}
-                    onBlur={e => e.target.style.borderColor = ''}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Tom de comunicação</label>
-                    <select
-                      value={form.persona_tone}
-                      onChange={e => setForm(f => ({ ...f, persona_tone: e.target.value }))}
-                      className={inputClass + ' cursor-pointer'}
-                      onFocus={e => e.target.style.borderColor = PRIMARY}
-                      onBlur={e => e.target.style.borderColor = ''}
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1">
+        {messages.map((msg, i) => (
+          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+              {msg.toolsUsed && msg.toolsUsed.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {msg.toolsUsed.map((t, ti) => (
+                    <span
+                      key={ti}
+                      className="text-[11px] px-2 py-0.5 rounded-full"
+                      style={{ background: `${PRIMARY}18`, color: PRIMARY }}
                     >
-                      <option value="formal">Formal</option>
-                      <option value="profissional">Profissional</option>
-                      <option value="descontraido">Descontraído</option>
-                      <option value="amigavel">Amigável</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Tamanho das respostas</label>
-                    <select
-                      value={form.persona_response_size}
-                      onChange={e => setForm(f => ({ ...f, persona_response_size: e.target.value }))}
-                      className={inputClass + ' cursor-pointer'}
-                      onFocus={e => e.target.style.borderColor = PRIMARY}
-                      onBlur={e => e.target.style.borderColor = ''}
-                    >
-                      <option value="curto">Curto e direto</option>
-                      <option value="detalhado">Mais detalhado</option>
-                    </select>
-                  </div>
+                      ✓ {TOOL_LABELS[t.tool] || t.tool}
+                    </span>
+                  ))}
                 </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Personalidade</label>
-                  <textarea
-                    value={form.persona_description}
-                    onChange={e => setForm(f => ({ ...f, persona_description: e.target.value }))}
-                    placeholder="Como o assistente se apresenta e descreve sua função…"
-                    rows={3}
-                    className={inputClass + ' resize-none'}
-                    onFocus={e => e.target.style.borderColor = PRIMARY}
-                    onBlur={e => e.target.style.borderColor = ''}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Previsão de retorno</label>
-                  <input
-                    type="text"
-                    value={form.response_hint}
-                    onChange={e => setForm(f => ({ ...f, response_hint: e.target.value }))}
-                    placeholder="Ex: Retorno ainda hoje, até as 17h…"
-                    className={inputClass}
-                    onFocus={e => e.target.style.borderColor = PRIMARY}
-                    onBlur={e => e.target.style.borderColor = ''}
-                  />
-                </div>
+              )}
+              <div
+                className="px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap"
+                style={
+                  msg.role === 'user'
+                    ? { background: PRIMARY, color: 'white', borderBottomRightRadius: '4px' }
+                    : { background: 'white', color: '#1f2937', border: '1px solid #e5e7eb', borderBottomLeftRadius: '4px' }
+                }
+              >
+                {msg.content}
               </div>
-            </>
-          ) : (() => {
-            const p = PERSONAS.find(x => x.id === selectedPersona)!
-            return (
-              <>
-                <div className="flex items-center gap-3 mb-4">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                    style={{ backgroundColor: p.avatarBg }}
-                  >
-                    {p.avatar}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900">Você escolheu {p.name} como sua assistente.</p>
-                    <p className="text-xs font-medium" style={{ color: p.avatarBg }}>{p.tagline}</p>
-                  </div>
-                </div>
-                <p className="text-sm text-gray-600 leading-relaxed mb-4">{p.summary}</p>
-                <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-500 border border-gray-100">
-                  <span className="font-medium text-gray-700">Previsão de retorno: </span>
-                  {p.response_hint}
-                </div>
-              </>
-            )
-          })()}
+            </div>
+          </div>
+        ))}
 
+        {loading && (
+          <div className="flex justify-start">
+            <div
+              className="px-4 py-3 rounded-2xl rounded-bl-sm flex gap-1 items-center"
+              style={{ background: 'white', border: '1px solid #e5e7eb' }}
+            >
+              {[0, 1, 2].map(i => (
+                <span
+                  key={i}
+                  className="w-1.5 h-1.5 rounded-full animate-bounce"
+                  style={{ background: PRIMARY, animationDelay: `${i * 0.15}s` }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="pt-3 border-t border-gray-200">
+        <div className="flex gap-2 items-end">
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder={`Fale com ${assistantName}… (Enter para enviar)`}
+            rows={1}
+            className="flex-1 resize-none rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:border-gray-400 bg-white"
+            style={{ minHeight: '44px', maxHeight: '120px' }}
+            onInput={e => {
+              const t = e.currentTarget
+              t.style.height = 'auto'
+              t.style.height = Math.min(t.scrollHeight, 120) + 'px'
+            }}
+          />
           <button
-            type="submit"
-            disabled={saving}
-            className="w-full text-white text-sm font-medium rounded-xl py-2.5 disabled:opacity-50 transition-colors mt-5"
-            style={{ backgroundColor: saved ? '#16a34a' : PRIMARY }}
+            onClick={send}
+            disabled={!input.trim() || loading}
+            className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-opacity disabled:opacity-40"
+            style={{ background: PRIMARY }}
           >
-            {saving ? 'Salvando…' : saved ? '✓ Salvo' : 'Salvar configurações'}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+              <path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </button>
-        </form>
-      </div>}
-
+        </div>
+        <p className="text-[11px] text-gray-400 mt-1.5 text-center">
+          Shift+Enter para nova linha · Enter para enviar
+        </p>
+      </div>
     </div>
   )
 }
