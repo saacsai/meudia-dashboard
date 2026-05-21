@@ -37,7 +37,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         session.user.email?.split('@')[0] ||
         ''
       )
-      let { data: rows } = await supabase
+      const { data: rows } = await supabase
         .from('instances')
         .select('persona_name, onboarding_completed, onboarding_step')
         .eq('user_id', session.user.id)
