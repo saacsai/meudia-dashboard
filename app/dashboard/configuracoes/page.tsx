@@ -353,30 +353,56 @@ function MemoriasSection() {
   const [memories, setMemories] = useState<Memory[]>([])
   const [loading, setLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [instanceId, setInstanceId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState('')
+  const [savingId, setSavingId] = useState<string | null>(null)
+
+  async function getToken() {
+    const { data: { session } } = await getSupabase().auth.getSession()
+    return session?.access_token || ''
+  }
 
   useEffect(() => {
     async function load() {
-      const supabase = getSupabase()
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
-      const { data: inst } = await supabase.from('instances').select('id').eq('user_id', session.user.id).eq('active', true).single()
-      if (!inst) { setLoading(false); return }
-      setInstanceId(inst.id)
-      const { data } = await supabase.from('assistant_memory').select('id, type, content, created_at').eq('instance_id', inst.id).order('created_at', { ascending: false })
-      setMemories(data || [])
+      const token = await getToken()
+      const res = await fetch('/api/assistente/memorias', { headers: { authorization: `Bearer ${token}` } })
+      if (res.ok) setMemories(await res.json())
       setLoading(false)
     }
     load()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function deleteMemory(id: string) {
-    if (!instanceId) return
     setDeletingId(id)
-    const supabase = getSupabase()
-    await supabase.from('assistant_memory').delete().eq('id', id).eq('instance_id', instanceId)
+    const token = await getToken()
+    await fetch('/api/assistente/memorias', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id })
+    })
     setMemories(prev => prev.filter(m => m.id !== id))
     setDeletingId(null)
+  }
+
+  function startEdit(m: Memory) {
+    setEditingId(m.id)
+    setEditDraft(m.content)
+  }
+
+  async function saveEdit(id: string) {
+    const content = editDraft.trim()
+    if (!content) return
+    setSavingId(id)
+    const token = await getToken()
+    const res = await fetch('/api/assistente/memorias', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id, content })
+    })
+    if (res.ok) setMemories(prev => prev.map(m => m.id === id ? { ...m, content } : m))
+    setEditingId(null)
+    setSavingId(null)
   }
 
   if (loading) return <p className="text-sm text-gray-400">Carregando…</p>
@@ -393,21 +419,79 @@ function MemoriasSection() {
   return (
     <div className="space-y-2">
       {memories.map(m => (
-        <div key={m.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
-          <span
-            className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white flex-shrink-0 mt-0.5"
-            style={{ backgroundColor: MEMORY_TYPE_COLORS[m.type] || '#6b7280' }}
-          >
-            {MEMORY_TYPE_LABELS[m.type] || m.type}
-          </span>
-          <p className="flex-1 text-xs text-gray-700 leading-relaxed">{m.content}</p>
-          <button
-            onClick={() => deleteMemory(m.id)}
-            disabled={deletingId === m.id}
-            className="flex-shrink-0 text-gray-300 hover:text-red-400 transition-colors disabled:opacity-40 text-lg leading-none"
-          >
-            ×
-          </button>
+        <div key={m.id} className="p-3 rounded-xl bg-gray-50 border border-gray-100">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span
+              className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white flex-shrink-0"
+              style={{ backgroundColor: MEMORY_TYPE_COLORS[m.type] || '#6b7280' }}
+            >
+              {MEMORY_TYPE_LABELS[m.type] || m.type}
+            </span>
+            <span className="text-[10px] text-gray-400 ml-auto">
+              {new Date(m.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+            </span>
+          </div>
+
+          {editingId === m.id ? (
+            <div className="space-y-1.5">
+              <textarea
+                value={editDraft}
+                onChange={e => setEditDraft(e.target.value)}
+                rows={2}
+                autoFocus
+                className="w-full text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 outline-none resize-none"
+                onKeyDown={e => { if (e.key === 'Escape') setEditingId(null) }}
+                style={{ borderColor: PRIMARY }}
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => saveEdit(m.id)}
+                  disabled={savingId === m.id}
+                  className="text-[11px] font-medium px-3 py-1 rounded-lg text-white disabled:opacity-50"
+                  style={{ backgroundColor: PRIMARY }}
+                >
+                  {savingId === m.id ? 'Salvando…' : 'Salvar'}
+                </button>
+                <button
+                  onClick={() => setEditingId(null)}
+                  className="text-[11px] text-gray-500 hover:text-gray-700 px-2 py-1"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2">
+              <p
+                className="flex-1 text-xs text-gray-700 leading-relaxed cursor-pointer hover:text-gray-900"
+                onClick={() => startEdit(m)}
+                title="Clique para editar"
+              >
+                {m.content}
+              </p>
+              <div className="flex gap-1 flex-shrink-0">
+                <button
+                  onClick={() => startEdit(m)}
+                  className="text-gray-300 hover:text-gray-500 transition-colors p-0.5"
+                  title="Editar"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+                <button
+                  onClick={() => deleteMemory(m.id)}
+                  disabled={deletingId === m.id}
+                  className="text-gray-300 hover:text-red-400 transition-colors disabled:opacity-40 p-0.5"
+                  title="Apagar"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ))}
     </div>
