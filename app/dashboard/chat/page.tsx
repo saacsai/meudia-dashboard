@@ -14,6 +14,7 @@ interface Message {
 }
 
 const TOOL_LABELS: Record<string, string> = {
+  listar_contatos: 'Listou contatos',
   buscar_contatos: 'Buscou contatos',
   definir_prioridade: 'Ajustou prioridade',
   consultar_fila: 'Consultou fila',

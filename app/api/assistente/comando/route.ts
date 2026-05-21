@@ -20,6 +20,17 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemi
 
 const TOOL_DECLARATIONS = [
   {
+    name: 'listar_contatos',
+    description: 'Lista contatos com filtro opcional por prioridade. Use para responder "quais são meus contatos prioritários/silenciados/normais" ou "lista todos os contatos".',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'], description: 'Filtrar por prioridade. Omitir para listar todos.' },
+        limit: { type: 'NUMBER', description: 'Máximo de contatos a retornar (padrão 20)' }
+      }
+    }
+  },
+  {
     name: 'buscar_contatos',
     description: 'Busca contatos pelo nome ou trecho do número. Use sempre antes de definir_prioridade ou adicionar_ao_grupo para obter o ID correto.',
     parameters: {
@@ -92,6 +103,28 @@ type ToolResult = Record<string, unknown>
 
 async function executeTool(name: string, args: ToolArgs, instanceId: string): Promise<ToolResult> {
   const supabase = db()
+
+  if (name === 'listar_contatos') {
+    const limit = Number(args.limit) || 20
+    let query = supabase
+      .from('contacts')
+      .select('id, name, remote_jid, priority')
+      .eq('instance_id', instanceId)
+      .order('name')
+      .limit(limit)
+    if (args.priority) query = query.eq('priority', args.priority)
+    const { data } = await query
+    if (!data?.length) return { total: 0, contatos: [], aviso: 'Nenhum contato encontrado.' }
+    return {
+      total: data.length,
+      contatos: data.map(c => ({
+        id: c.id,
+        nome: c.name,
+        numero: c.remote_jid.replace('@s.whatsapp.net', ''),
+        prioridade: c.priority
+      }))
+    }
+  }
 
   if (name === 'buscar_contatos') {
     const { data } = await supabase
