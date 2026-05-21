@@ -1,0 +1,379 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type ToolArgs = Record<string, unknown>
+export type ToolResult = Record<string, unknown>
+export type ToolUsed = { tool: string; args: ToolArgs }
+
+export type GeminiPart =
+  | { text: string }
+  | { functionCall: { name: string; args: ToolArgs } }
+  | { functionResponse: { name: string; response: ToolResult } }
+
+export type GeminiContent = { role: string; parts: GeminiPart[] }
+
+export const MEMORY_TYPE_LABELS: Record<string, string> = {
+  contact_note: 'Contato',
+  agenda: 'Agenda',
+  instruction: 'Instrução',
+}
+
+// ─── Tool declarations ────────────────────────────────────────────────────────
+
+export const TOOL_DECLARATIONS = [
+  {
+    name: 'listar_contatos',
+    description: 'Lista contatos com filtro opcional por prioridade.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'] },
+        limit: { type: 'NUMBER' }
+      }
+    }
+  },
+  {
+    name: 'buscar_contatos',
+    description: 'Busca contatos pelo nome ou trecho do número. Use antes de definir_prioridade ou adicionar_ao_grupo.',
+    parameters: {
+      type: 'OBJECT',
+      properties: { query: { type: 'STRING' } },
+      required: ['query']
+    }
+  },
+  {
+    name: 'definir_prioridade',
+    description: 'Define a prioridade de um contato: priority, normal ou muted.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        contact_id: { type: 'STRING' },
+        priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'] },
+        contact_name: { type: 'STRING' }
+      },
+      required: ['contact_id', 'priority']
+    }
+  },
+  {
+    name: 'consultar_fila',
+    description: 'Retorna as mensagens pendentes na fila.',
+    parameters: {
+      type: 'OBJECT',
+      properties: { limit: { type: 'NUMBER' } }
+    }
+  },
+  {
+    name: 'criar_grupo',
+    description: 'Cria um novo grupo de contatos.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        name: { type: 'STRING' },
+        description: { type: 'STRING' },
+        color: { type: 'STRING' }
+      },
+      required: ['name']
+    }
+  },
+  {
+    name: 'adicionar_ao_grupo',
+    description: 'Adiciona um contato a um grupo existente.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        contact_id: { type: 'STRING' },
+        group_id: { type: 'STRING' },
+        contact_name: { type: 'STRING' }
+      },
+      required: ['contact_id', 'group_id']
+    }
+  },
+  {
+    name: 'listar_grupos',
+    description: 'Lista os grupos de contatos. Use antes de adicionar_ao_grupo para obter o group_id.'
+  },
+  {
+    name: 'criar_contato',
+    description: 'Cadastra um novo contato.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        name: { type: 'STRING' },
+        phone: { type: 'STRING' },
+        priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'] }
+      },
+      required: ['name', 'phone']
+    }
+  },
+  {
+    name: 'salvar_memoria',
+    description: 'Salva uma informação importante para lembrar em conversas futuras. Use quando o usuário mencionar algo relevante sobre contatos, agenda recorrente ou instruções de comportamento.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        type: {
+          type: 'STRING',
+          enum: ['contact_note', 'agenda', 'instruction'],
+          description: 'contact_note: nota sobre um contato. agenda: compromisso ou rotina recorrente. instruction: instrução de comportamento permanente.'
+        },
+        content: { type: 'STRING', description: 'O que deve ser lembrado, de forma clara e objetiva.' }
+      },
+      required: ['type', 'content']
+    }
+  },
+  {
+    name: 'apagar_memoria',
+    description: 'Apaga uma memória salva anteriormente quando o usuário pedir para esquecer algo.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        id: { type: 'STRING', description: 'ID da memória a apagar (visível no contexto persistente)' }
+      },
+      required: ['id']
+    }
+  }
+]
+
+// ─── Memory loading ───────────────────────────────────────────────────────────
+
+export async function loadMemoryBlock(
+  instanceId: string,
+  supabase: SupabaseClient
+): Promise<string> {
+  const { data } = await supabase
+    .from('assistant_memory')
+    .select('id, type, content')
+    .eq('instance_id', instanceId)
+    .order('created_at')
+
+  if (!data?.length) return ''
+
+  const lines = data.map(m => `[${MEMORY_TYPE_LABELS[m.type] || m.type}] (id:${m.id}) ${m.content}`)
+  return `\nCONTEXTO PERSISTENTE (lembre sempre):\n${lines.join('\n')}\n`
+}
+
+// ─── Tool execution ───────────────────────────────────────────────────────────
+
+export async function executeTool(
+  name: string,
+  args: ToolArgs,
+  instanceId: string,
+  supabase: SupabaseClient
+): Promise<ToolResult> {
+
+  if (name === 'listar_contatos') {
+    const limit = Number(args.limit) || 20
+    let query = supabase
+      .from('contacts')
+      .select('id, name, remote_jid, priority')
+      .eq('instance_id', instanceId)
+      .order('name')
+      .limit(limit)
+    if (args.priority) query = query.eq('priority', args.priority as string)
+    const { data } = await query
+    if (!data?.length) return { total: 0, contatos: [], aviso: 'Nenhum contato encontrado.' }
+    return {
+      total: data.length,
+      contatos: data.map(c => ({
+        id: c.id,
+        nome: c.name,
+        numero: c.remote_jid.replace('@s.whatsapp.net', ''),
+        prioridade: c.priority
+      }))
+    }
+  }
+
+  if (name === 'buscar_contatos') {
+    const rawQuery = String(args.query).trim()
+    const { data: exact } = await supabase
+      .from('contacts')
+      .select('id, name, remote_jid, priority')
+      .eq('instance_id', instanceId)
+      .ilike('name', `%${rawQuery}%`)
+      .limit(5)
+    let data = exact
+    if (!data?.length) {
+      const words = rawQuery.split(/\s+/).filter(w => w.length >= 3)
+      if (words.length > 0) {
+        const orFilter = words.map(w => `name.ilike.%${w}%`).join(',')
+        const { data: partial } = await supabase
+          .from('contacts')
+          .select('id, name, remote_jid, priority')
+          .eq('instance_id', instanceId)
+          .or(orFilter)
+          .limit(8)
+        data = partial
+      }
+    }
+    if (!data?.length) return { encontrados: [], aviso: 'Nenhum contato encontrado.' }
+    return {
+      encontrados: data.map(c => ({
+        id: c.id,
+        nome: c.name,
+        numero: c.remote_jid.replace('@s.whatsapp.net', ''),
+        prioridade: c.priority
+      }))
+    }
+  }
+
+  if (name === 'definir_prioridade') {
+    const { error } = await supabase
+      .from('contacts')
+      .update({ priority: args.priority, classified_manually: true })
+      .eq('id', args.contact_id)
+      .eq('instance_id', instanceId)
+    if (error) return { sucesso: false, erro: error.message }
+    return { sucesso: true, nome: args.contact_name ?? args.contact_id, prioridade: args.priority }
+  }
+
+  if (name === 'consultar_fila') {
+    const limit = Number(args.limit) || 8
+    const { data } = await supabase
+      .from('message_queue')
+      .select('contact_name, message_summary, priority, received_at')
+      .eq('instance_id', instanceId)
+      .eq('included_in_digest', false)
+      .order('received_at', { ascending: false })
+      .limit(limit)
+    if (!data?.length) return { total: 0, mensagens: [], aviso: 'Fila vazia.' }
+    return { total: data.length, mensagens: data }
+  }
+
+  if (name === 'criar_grupo') {
+    const { data, error } = await supabase
+      .from('contact_groups')
+      .insert({
+        instance_id: instanceId,
+        name: String(args.name),
+        description: args.description ? String(args.description) : null,
+        color: args.color ? String(args.color) : '#6b7280'
+      })
+      .select('id, name')
+      .single()
+    if (error) {
+      if (error.code === '23505') return { sucesso: false, erro: 'Já existe um grupo com esse nome.' }
+      return { sucesso: false, erro: error.message }
+    }
+    return { sucesso: true, id: data.id, nome: data.name }
+  }
+
+  if (name === 'adicionar_ao_grupo') {
+    const { error } = await supabase
+      .from('contact_group_members')
+      .insert({ group_id: String(args.group_id), contact_id: String(args.contact_id) })
+    if (error) {
+      if (error.code === '23505') return { sucesso: false, erro: 'Contato já está nesse grupo.' }
+      return { sucesso: false, erro: error.message }
+    }
+    return { sucesso: true, nome: args.contact_name ?? args.contact_id }
+  }
+
+  if (name === 'listar_grupos') {
+    const { data } = await supabase
+      .from('contact_groups')
+      .select('id, name, description, color')
+      .eq('instance_id', instanceId)
+      .order('name')
+    return { grupos: data ?? [] }
+  }
+
+  if (name === 'criar_contato') {
+    const phone = String(args.phone).replace(/\D/g, '')
+    if (!phone) return { sucesso: false, erro: 'Número inválido.' }
+    const { data, error } = await supabase
+      .from('contacts')
+      .insert({
+        instance_id: instanceId,
+        name: String(args.name),
+        remote_jid: `${phone}@s.whatsapp.net`,
+        priority: (args.priority as string) || 'normal',
+        classified_manually: true
+      })
+      .select('id, name, remote_jid, priority')
+      .single()
+    if (error) {
+      if (error.code === '23505') return { sucesso: false, erro: 'Já existe um contato com esse número.' }
+      return { sucesso: false, erro: error.message }
+    }
+    return { sucesso: true, id: data.id, nome: data.name, numero: phone, prioridade: data.priority }
+  }
+
+  if (name === 'salvar_memoria') {
+    const validTypes = ['contact_note', 'agenda', 'instruction']
+    const type = validTypes.includes(String(args.type)) ? String(args.type) : 'instruction'
+    const { data, error } = await supabase
+      .from('assistant_memory')
+      .insert({ instance_id: instanceId, type, content: String(args.content) })
+      .select('id')
+      .single()
+    if (error) return { sucesso: false, erro: error.message }
+    return { sucesso: true, id: data.id, tipo: type }
+  }
+
+  if (name === 'apagar_memoria') {
+    const { error } = await supabase
+      .from('assistant_memory')
+      .delete()
+      .eq('id', String(args.id))
+      .eq('instance_id', instanceId)
+    if (error) return { sucesso: false, erro: error.message }
+    return { sucesso: true }
+  }
+
+  return { erro: `Ferramenta desconhecida: ${name}` }
+}
+
+// ─── Gemini multi-turn ────────────────────────────────────────────────────────
+
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`
+
+export async function callGemini(
+  contents: GeminiContent[],
+  system: string,
+  instanceId: string,
+  supabase: SupabaseClient,
+  depth = 0
+): Promise<{ text: string; toolsUsed: ToolUsed[] }> {
+  const toolsUsed: ToolUsed[] = []
+
+  const res = await fetch(`${GEMINI_URL}?key=${process.env.GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: system }] },
+      contents,
+      tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 512 }
+    })
+  })
+
+  const json = await res.json()
+  if (!res.ok) {
+    console.error('Gemini error', res.status, JSON.stringify(json).slice(0, 200))
+    return { text: 'Não consegui processar. Tente novamente.', toolsUsed }
+  }
+
+  const parts: GeminiPart[] = json.candidates?.[0]?.content?.parts ?? []
+  const fnCall = parts.find(
+    (p): p is { functionCall: { name: string; args: ToolArgs } } => 'functionCall' in p
+  )
+
+  if (fnCall && depth < 12) {
+    const { name, args } = fnCall.functionCall
+    toolsUsed.push({ tool: name, args })
+    const result = await executeTool(name, args, instanceId, supabase)
+    const next = await callGemini(
+      [
+        ...contents,
+        { role: 'model', parts: [{ functionCall: fnCall.functionCall }] },
+        { role: 'user', parts: [{ functionResponse: { name, response: result } }] }
+      ],
+      system, instanceId, supabase, depth + 1
+    )
+    return { text: next.text, toolsUsed: [...toolsUsed, ...next.toolsUsed] }
+  }
+
+  const textPart = parts.find((p): p is { text: string } => 'text' in p)
+  return { text: textPart?.text ?? 'Feito.', toolsUsed }
+}

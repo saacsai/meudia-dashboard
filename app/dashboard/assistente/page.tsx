@@ -27,6 +27,8 @@ const TOOL_LABELS: Record<string, string> = {
   adicionar_ao_grupo: 'Adicionou ao grupo',
   listar_grupos: 'Listou grupos',
   criar_contato: 'Cadastrou contato',
+  salvar_memoria: 'Salvou memória',
+  apagar_memoria: 'Apagou memória',
 }
 
 function buildWelcome(name: string): Message {

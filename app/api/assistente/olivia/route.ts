@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { callGemini, loadMemoryBlock } from '@/lib/assistant-tools'
+import type { GeminiContent } from '@/lib/assistant-tools'
 
 async function getAuthUser(req: NextRequest) {
   const token = req.headers.get('authorization')?.replace('Bearer ', '')
@@ -14,270 +16,16 @@ function db() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, key)
 }
 
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`
-
-const TOOL_DECLARATIONS = [
-  {
-    name: 'listar_contatos',
-    description: 'Lista contatos com filtro opcional por prioridade.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'] },
-        limit: { type: 'NUMBER' }
-      }
-    }
-  },
-  {
-    name: 'buscar_contatos',
-    description: 'Busca contatos pelo nome ou trecho do número. Use antes de definir_prioridade ou adicionar_ao_grupo.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        query: { type: 'STRING' }
-      },
-      required: ['query']
-    }
-  },
-  {
-    name: 'definir_prioridade',
-    description: 'Define a prioridade de um contato: priority, normal ou muted.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        contact_id: { type: 'STRING' },
-        priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'] },
-        contact_name: { type: 'STRING' }
-      },
-      required: ['contact_id', 'priority']
-    }
-  },
-  {
-    name: 'consultar_fila',
-    description: 'Retorna as mensagens pendentes na fila.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        limit: { type: 'NUMBER' }
-      }
-    }
-  },
-  {
-    name: 'criar_grupo',
-    description: 'Cria um novo grupo de contatos.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        name: { type: 'STRING' },
-        description: { type: 'STRING' },
-        color: { type: 'STRING' }
-      },
-      required: ['name']
-    }
-  },
-  {
-    name: 'adicionar_ao_grupo',
-    description: 'Adiciona um contato a um grupo existente.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        contact_id: { type: 'STRING' },
-        group_id: { type: 'STRING' },
-        contact_name: { type: 'STRING' }
-      },
-      required: ['contact_id', 'group_id']
-    }
-  },
-  {
-    name: 'listar_grupos',
-    description: 'Lista os grupos de contatos. Use antes de adicionar_ao_grupo para obter o group_id.'
-  },
-  {
-    name: 'criar_contato',
-    description: 'Cadastra um novo contato.',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        name: { type: 'STRING' },
-        phone: { type: 'STRING' },
-        priority: { type: 'STRING', enum: ['priority', 'normal', 'muted'] }
-      },
-      required: ['name', 'phone']
-    }
-  }
-]
-
-type ToolArgs = Record<string, unknown>
-type ToolResult = Record<string, unknown>
-
-async function executeTool(name: string, args: ToolArgs, instanceId: string): Promise<ToolResult> {
-  const supabase = db()
-
-  if (name === 'listar_contatos') {
-    const limit = Number(args.limit) || 20
-    let query = supabase
-      .from('contacts')
-      .select('id, name, remote_jid, priority')
-      .eq('instance_id', instanceId)
-      .order('name')
-      .limit(limit)
-    if (args.priority) query = query.eq('priority', args.priority)
-    const { data } = await query
-    if (!data?.length) return { total: 0, contatos: [], aviso: 'Nenhum contato encontrado.' }
-    return { total: data.length, contatos: data.map(c => ({ id: c.id, nome: c.name, numero: c.remote_jid.replace('@s.whatsapp.net', ''), prioridade: c.priority })) }
-  }
-
-  if (name === 'buscar_contatos') {
-    const rawQuery = String(args.query).trim()
-    const { data: exact } = await supabase
-      .from('contacts')
-      .select('id, name, remote_jid, priority')
-      .eq('instance_id', instanceId)
-      .ilike('name', `%${rawQuery}%`)
-      .limit(5)
-    let data = exact
-    if (!data?.length) {
-      const words = rawQuery.split(/\s+/).filter(w => w.length >= 3)
-      if (words.length > 0) {
-        const orFilter = words.map(w => `name.ilike.%${w}%`).join(',')
-        const { data: partial } = await supabase
-          .from('contacts')
-          .select('id, name, remote_jid, priority')
-          .eq('instance_id', instanceId)
-          .or(orFilter)
-          .limit(8)
-        data = partial
-      }
-    }
-    if (!data?.length) return { encontrados: [], aviso: 'Nenhum contato encontrado.' }
-    return { encontrados: data.map(c => ({ id: c.id, nome: c.name, numero: c.remote_jid.replace('@s.whatsapp.net', ''), prioridade: c.priority })) }
-  }
-
-  if (name === 'definir_prioridade') {
-    const { error } = await supabase
-      .from('contacts')
-      .update({ priority: args.priority, classified_manually: true })
-      .eq('id', args.contact_id)
-      .eq('instance_id', instanceId)
-    if (error) return { sucesso: false, erro: error.message }
-    return { sucesso: true, nome: args.contact_name ?? args.contact_id, prioridade: args.priority }
-  }
-
-  if (name === 'consultar_fila') {
-    const limit = Number(args.limit) || 8
-    const { data } = await supabase
-      .from('message_queue')
-      .select('contact_name, message_summary, priority, received_at')
-      .eq('instance_id', instanceId)
-      .eq('included_in_digest', false)
-      .order('received_at', { ascending: false })
-      .limit(limit)
-    if (!data?.length) return { total: 0, mensagens: [], aviso: 'Fila vazia.' }
-    return { total: data.length, mensagens: data }
-  }
-
-  if (name === 'criar_grupo') {
-    const { data, error } = await supabase
-      .from('contact_groups')
-      .insert({ instance_id: instanceId, name: String(args.name), description: args.description ? String(args.description) : null, color: args.color ? String(args.color) : '#6b7280' })
-      .select('id, name')
-      .single()
-    if (error) {
-      if (error.code === '23505') return { sucesso: false, erro: 'Já existe um grupo com esse nome.' }
-      return { sucesso: false, erro: error.message }
-    }
-    return { sucesso: true, id: data.id, nome: data.name }
-  }
-
-  if (name === 'adicionar_ao_grupo') {
-    const { error } = await supabase
-      .from('contact_group_members')
-      .insert({ group_id: String(args.group_id), contact_id: String(args.contact_id) })
-    if (error) {
-      if (error.code === '23505') return { sucesso: false, erro: 'Contato já está nesse grupo.' }
-      return { sucesso: false, erro: error.message }
-    }
-    return { sucesso: true, nome: args.contact_name ?? args.contact_id }
-  }
-
-  if (name === 'listar_grupos') {
-    const { data } = await supabase
-      .from('contact_groups')
-      .select('id, name, description, color')
-      .eq('instance_id', instanceId)
-      .order('name')
-    return { grupos: data ?? [] }
-  }
-
-  if (name === 'criar_contato') {
-    const phone = String(args.phone).replace(/\D/g, '')
-    if (!phone) return { sucesso: false, erro: 'Número inválido.' }
-    const { data, error } = await supabase
-      .from('contacts')
-      .insert({ instance_id: instanceId, name: String(args.name), remote_jid: `${phone}@s.whatsapp.net`, priority: (args.priority as string) || 'normal', classified_manually: true })
-      .select('id, name, remote_jid, priority')
-      .single()
-    if (error) {
-      if (error.code === '23505') return { sucesso: false, erro: 'Já existe um contato com esse número.' }
-      return { sucesso: false, erro: error.message }
-    }
-    return { sucesso: true, id: data.id, nome: data.name, numero: phone, prioridade: data.priority }
-  }
-
-  return { erro: `Ferramenta desconhecida: ${name}` }
+const toneMap: Record<string, string> = {
+  formal:       'formal e preciso, usa linguagem corporativa',
+  profissional: 'profissional e eficiente, direto ao ponto',
+  descontraido: 'descontraído e próximo, comunicação leve',
+  amigavel:     'amigável e caloroso, cria conexão',
 }
 
-type GeminiPart =
-  | { text: string }
-  | { functionCall: { name: string; args: ToolArgs } }
-  | { functionResponse: { name: string; response: ToolResult } }
-
-type GeminiContent = { role: string; parts: GeminiPart[] }
-type ToolUsed = { tool: string; args: ToolArgs }
-
-async function callGemini(
-  contents: GeminiContent[],
-  system: string,
-  instanceId: string,
-  depth = 0
-): Promise<{ text: string; toolsUsed: ToolUsed[] }> {
-  const toolsUsed: ToolUsed[] = []
-
-  const res = await fetch(`${GEMINI_URL}?key=${process.env.GEMINI_API_KEY}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: system }] },
-      contents,
-      tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 512 }
-    })
-  })
-
-  const json = await res.json()
-  if (!res.ok) {
-    console.error('Gemini error', res.status, JSON.stringify(json).slice(0, 200))
-    return { text: 'Não consegui processar. Tente novamente.', toolsUsed }
-  }
-
-  const parts: GeminiPart[] = json.candidates?.[0]?.content?.parts ?? []
-  const fnCall = parts.find(
-    (p): p is { functionCall: { name: string; args: ToolArgs } } => 'functionCall' in p
-  )
-
-  if (fnCall && depth < 12) {
-    const { name, args } = fnCall.functionCall
-    toolsUsed.push({ tool: name, args })
-    const result = await executeTool(name, args, instanceId)
-    const next = await callGemini(
-      [...contents, { role: 'model', parts: [{ functionCall: fnCall.functionCall }] }, { role: 'user', parts: [{ functionResponse: { name, response: result } }] }],
-      system, instanceId, depth + 1
-    )
-    return { text: next.text, toolsUsed: [...toolsUsed, ...next.toolsUsed] }
-  }
-
-  const textPart = parts.find((p): p is { text: string } => 'text' in p)
-  return { text: textPart?.text ?? 'Feito.', toolsUsed }
+const sizeMap: Record<string, string> = {
+  curto:     'respostas curtas e objetivas',
+  detalhado: 'respostas completas e detalhadas',
 }
 
 export async function POST(req: NextRequest) {
@@ -308,29 +56,21 @@ export async function POST(req: NextRequest) {
   const fullName = profile?.full_name || user.email?.split('@')[0] || 'usuário'
   const userName = fullName.split(' ')[0]
   const assistantName = inst.persona_name || 'Assistente'
-
-  const toneMap: Record<string, string> = {
-    formal: 'formal e preciso, usa linguagem corporativa',
-    profissional: 'profissional e eficiente, direto ao ponto',
-    descontraido: 'descontraído e próximo, comunicação leve',
-    amigavel: 'amigável e caloroso, cria conexão'
-  }
-  const sizeMap: Record<string, string> = {
-    curto: 'respostas curtas e objetivas',
-    detalhado: 'respostas completas e detalhadas'
-  }
-  const tone = toneMap[inst.persona_tone] || 'profissional'
+  const tone = toneMap[inst.persona_tone] || 'profissional e eficiente'
   const size = sizeMap[inst.persona_response_size] || 'respostas curtas'
 
-  const { data: historyRows } = await supabase
-    .from('assistant_messages')
-    .select('role, content')
-    .eq('instance_id', inst.id)
-    .eq('chat_source', 'olivia')
-    .order('created_at', { ascending: false })
-    .limit(10)
+  const [historyResult, memoryBlock] = await Promise.all([
+    supabase
+      .from('assistant_messages')
+      .select('role, content')
+      .eq('instance_id', inst.id)
+      .eq('chat_source', 'olivia')
+      .order('created_at', { ascending: false })
+      .limit(10),
+    loadMemoryBlock(inst.id, supabase)
+  ])
 
-  const history: GeminiContent[] = (historyRows ?? [])
+  const history: GeminiContent[] = (historyResult.data ?? [])
     .reverse()
     .map(r => ({ role: r.role === 'assistant' ? 'model' : 'user', parts: [{ text: r.content }] }))
 
@@ -344,7 +84,7 @@ ${personaBase}
 
 Tom: ${tone}.
 Formato: ${size}.
-
+${memoryBlock}
 O MeuDIA está gerenciando o WhatsApp de ${userName} enquanto ele foca no que importa.
 
 COMO VOCÊ AGE:
@@ -352,12 +92,15 @@ COMO VOCÊ AGE:
 - Confirme ações de forma natural — nunca mecanicamente.
 - Nunca termine com "Posso ajudar em mais alguma coisa?" ou frases de atendente.
 - Quando executar múltiplas ações, confirme todas de uma vez ao final.
+- Use salvar_memoria quando o usuário mencionar algo que vale lembrar (nota sobre contato, agenda recorrente, instrução de comportamento).
+- Use apagar_memoria quando o usuário pedir para esquecer algo.
 
-O QUE VOCÊ FAZ (use as ferramentas disponíveis):
+O QUE VOCÊ FAZ:
 - Buscar, listar e cadastrar contatos
 - Definir prioridade de contatos
-- Consultar a fila de mensagens acumuladas
-- Criar, listar grupos e adicionar contatos a grupos
+- Consultar a fila de mensagens
+- Criar e gerenciar grupos de contatos
+- Salvar e apagar memórias
 
 Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`
 
@@ -366,7 +109,7 @@ Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' 
     { role: 'user', parts: [{ text: message.trim() }] }
   ]
 
-  const { text, toolsUsed } = await callGemini(contents, system, inst.id)
+  const { text, toolsUsed } = await callGemini(contents, system, inst.id, supabase)
 
   await supabase.from('assistant_messages').insert([
     { instance_id: inst.id, role: 'user', content: message.trim(), chat_source: 'olivia' },

@@ -370,12 +370,101 @@ function DigestSection() {
   )
 }
 
+// ─── Memórias Section ─────────────────────────────────────────────────────────
+
+interface Memory {
+  id: string
+  type: string
+  content: string
+  created_at: string
+}
+
+const MEMORY_TYPE_LABELS: Record<string, string> = {
+  contact_note: 'Contato',
+  agenda: 'Agenda',
+  instruction: 'Instrução',
+}
+
+const MEMORY_TYPE_COLORS: Record<string, string> = {
+  contact_note: '#7C3AED',
+  agenda: '#059669',
+  instruction: '#2A5F6B',
+}
+
+function MemoriasSection() {
+  const [memories, setMemories] = useState<Memory[]>([])
+  const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [instanceId, setInstanceId] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function load() {
+      const supabase = getSupabase()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const { data: inst } = await supabase.from('instances').select('id').eq('user_id', session.user.id).eq('active', true).single()
+      if (!inst) { setLoading(false); return }
+      setInstanceId(inst.id)
+      const { data } = await supabase.from('assistant_memory').select('id, type, content, created_at').eq('instance_id', inst.id).order('created_at', { ascending: false })
+      setMemories(data || [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  async function deleteMemory(id: string) {
+    if (!instanceId) return
+    setDeletingId(id)
+    const supabase = getSupabase()
+    await supabase.from('assistant_memory').delete().eq('id', id).eq('instance_id', instanceId)
+    setMemories(prev => prev.filter(m => m.id !== id))
+    setDeletingId(null)
+  }
+
+  if (loading) return <p className="text-sm text-gray-400">Carregando…</p>
+
+  if (!memories.length) {
+    return (
+      <p className="text-sm text-gray-400 text-center py-4">
+        Nenhuma memória salva ainda.<br />
+        <span className="text-xs">Diga para a assistente "lembra que o Anderson é sócio" para ela começar a guardar contexto.</span>
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      {memories.map(m => (
+        <div key={m.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+          <span
+            className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white flex-shrink-0 mt-0.5"
+            style={{ backgroundColor: MEMORY_TYPE_COLORS[m.type] || '#6b7280' }}
+          >
+            {MEMORY_TYPE_LABELS[m.type] || m.type}
+          </span>
+          <p className="flex-1 text-xs text-gray-700 leading-relaxed">{m.content}</p>
+          <button
+            onClick={() => deleteMemory(m.id)}
+            disabled={deletingId === m.id}
+            className="flex-shrink-0 text-gray-300 hover:text-red-400 transition-colors disabled:opacity-40 text-lg leading-none"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-6">
-      <h2 className="text-base font-bold text-gray-900 mb-4">{title}</h2>
+      <div className="mb-4">
+        <h2 className="text-base font-bold text-gray-900">{title}</h2>
+        {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+      </div>
       {children}
     </div>
   )
@@ -392,6 +481,9 @@ export default function ConfiguracoesPage() {
       </Section>
       <Section title="Horários do Resumo">
         <DigestSection />
+      </Section>
+      <Section title="Memórias" subtitle="O que a assistente lembra entre conversas. Você pode apagar qualquer item.">
+        <MemoriasSection />
       </Section>
     </div>
   )
