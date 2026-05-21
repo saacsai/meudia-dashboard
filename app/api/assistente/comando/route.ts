@@ -284,7 +284,7 @@ async function callGemini(
     (p): p is { functionCall: { name: string; args: ToolArgs } } => 'functionCall' in p
   )
 
-  if (fnCall && depth < 3) {
+  if (fnCall && depth < 12) {
     const { name, args } = fnCall.functionCall
     toolsUsed.push({ tool: name, args })
     const result = await executeTool(name, args, instanceId)
