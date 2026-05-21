@@ -6,6 +6,7 @@ import { getSupabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
 import EditarPerfilPage from '@/components/EditarPerfilPage'
 import GerenciarPlanoPage from '@/components/GerenciarPlanoPage'
+import OnboardingView from '@/components/OnboardingView'
 
 const PRIMARY = '#2A5F6B'
 
@@ -17,6 +18,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [userName, setUserName] = useState('')
   const [userEmail, setUserEmail] = useState('')
   const [assistantName, setAssistantName] = useState('Assistente')
+  const [onboardingCompleted, setOnboardingCompleted] = useState(true) // default true evita flash
+  const [onboardingStep, setOnboardingStep] = useState(0)
   const [view, setView] = useState<View>('main')
 
   useEffect(() => { setView('main') }, [pathname])
@@ -36,11 +39,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       )
       const { data: rows } = await supabase
         .from('instances')
-        .select('persona_name')
+        .select('persona_name, onboarding_completed, onboarding_step')
         .eq('user_id', session.user.id)
         .eq('active', true)
         .limit(1)
-      if (rows?.[0]?.persona_name) setAssistantName(rows[0].persona_name)
+      if (rows?.[0]) {
+        if (rows[0].persona_name) setAssistantName(rows[0].persona_name)
+        setOnboardingCompleted(rows[0].onboarding_completed ?? true)
+        setOnboardingStep(rows[0].onboarding_step ?? 0)
+      }
       setLoading(false)
     })
   }, [])
@@ -71,6 +78,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen flex items-center justify-center" style={{ background: '#F0F5F6' }}>
       <p className="text-sm text-gray-400">Carregando…</p>
     </div>
+  )
+
+  if (!onboardingCompleted) return (
+    <OnboardingView
+      userName={userName}
+      initialStep={onboardingStep}
+      onComplete={(name) => {
+        if (name) setAssistantName(name)
+        setOnboardingCompleted(true)
+      }}
+    />
   )
 
   return (
