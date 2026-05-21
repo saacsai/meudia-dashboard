@@ -1,35 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-async function getAuthUser(req: NextRequest) {
-  const token = req.headers.get('authorization')?.replace('Bearer ', '')
-  if (!token) return null
-  const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
-  const { data: { user } } = await sb.auth.getUser(token)
-  return user ?? null
+const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+// Se tiver service key, bypassa RLS. Senão, usa o JWT do usuário para que
+// as políticas RLS reconheçam auth.uid() corretamente.
+function db(userToken: string) {
+  const serviceKey = process.env.SUPABASE_SERVICE_KEY
+  if (serviceKey) return createClient(URL, serviceKey)
+  return createClient(URL, ANON, {
+    global: { headers: { Authorization: `Bearer ${userToken}` } }
+  })
 }
 
-function db() {
-  const key = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, key)
-}
-
-// Called once on first login when no instance exists for the user.
-// Creates users row + instances row with onboarding defaults.
 export async function POST(req: NextRequest) {
-  const user = await getAuthUser(req)
+  const token = req.headers.get('authorization')?.replace('Bearer ', '') ?? ''
+  if (!token) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  // Valida o token e extrai o usuário
+  const { data: { user } } = await createClient(URL, ANON).auth.getUser(token)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const supabase = db()
+  const supabase = db(token)
 
-  // Upsert users row
+  // Upsert na tabela pública users
   await supabase.from('users').upsert({
     id: user.id,
     email: user.email ?? '',
     full_name: user.user_metadata?.full_name ?? '',
   }, { onConflict: 'id' })
 
-  // Check if instance already exists (race condition guard)
+  // Guarda contra race condition: verifica se já existe
   const { data: existing } = await supabase
     .from('instances')
     .select('id, onboarding_completed, onboarding_step')
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(existing[0])
   }
 
-  // Create new instance with onboarding defaults
+  // Cria instância com defaults de onboarding
   const { data: instance, error } = await supabase
     .from('instances')
     .insert({
