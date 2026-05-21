@@ -37,25 +37,6 @@ function ReadCard({ bullets }: { bullets: string[] }) {
   )
 }
 
-function StepDots({ current, total }: { current: number; total: number }) {
-  return (
-    <div className="flex items-center gap-2">
-      {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          className="rounded-full transition-all duration-300"
-          style={{
-            width: i === current ? 24 : 8,
-            height: 8,
-            backgroundColor: i < current ? `${PRIMARY}80` : i === current ? PRIMARY : '#d1d5db',
-          }}
-        />
-      ))}
-      <span className="text-xs text-gray-400 ml-1">Passo {current + 1} de {total}</span>
-    </div>
-  )
-}
-
 // ─── Step 1: WhatsApp ─────────────────────────────────────────────────────────
 
 type WaState = 'loading' | 'disconnected' | 'awaiting_qr' | 'connected'
@@ -173,14 +154,14 @@ function WhatsAppStep({ onConnected }: { onConnected: () => void }) {
           </label>
         </div>
       ) : (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800">
-          Nenhum número salvo no perfil. Edite seu perfil (canto inferior esquerdo) antes de continuar.
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700">
+          Use o mesmo número de WhatsApp que deseja conectar ao MeuDIA. Você pode editar seu perfil depois.
         </div>
       )}
       {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg p-2">{error}</p>}
       <button
         onClick={create}
-        disabled={creating || !confirmed || !perfilPhone}
+        disabled={creating || (!!perfilPhone && !confirmed)}
         className="w-full text-white text-sm font-medium rounded-xl py-2.5 disabled:opacity-50 transition-colors"
         style={{ backgroundColor: PRIMARY }}
       >
@@ -444,57 +425,39 @@ export default function OnboardingView({ userName, initialStep, onComplete }: On
   }
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: '#F0F5F6' }}>
+    <div className="max-w-lg space-y-6">
 
-      {/* Header */}
-      <div className="bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/meudia_logo.jpg" alt="MeuDIA" className="w-7 h-7 rounded-lg object-cover" />
-          <span className="font-semibold text-gray-800 text-sm">MeuDIA</span>
-        </div>
-        <span className="text-xs text-gray-400">Configuração inicial</span>
+      {/* BIA message */}
+      <div className="flex items-start gap-3">
+        <BiaAvatar />
+        <p className="text-sm text-gray-700 leading-relaxed pt-1">
+          {step === 0 && userName ? `Olá, ${userName}! Sou a BIA. ` : ''}{config.biaIntro}
+        </p>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 flex items-start justify-center py-10 px-4">
-        <div className="w-full max-w-lg space-y-6">
+      {/* Leia com atenção */}
+      <ReadCard bullets={config.bullets} />
 
-          <StepDots current={step} total={4} />
-
-          {/* BIA message */}
-          <div className="flex items-start gap-3">
-            <BiaAvatar />
-            <p className="text-sm text-gray-700 leading-relaxed pt-1">
-              {step === 0 && userName ? `Olá, ${userName}! Sou a BIA. ` : ''}{config.biaIntro}
-            </p>
-          </div>
-
-          {/* Leia com atenção */}
-          <ReadCard bullets={config.bullets} />
-
-          {/* Action area */}
-          <div>
-            {step === 0 && <WhatsAppStep onConnected={() => setStepReady(true)} />}
-            {step === 1 && <ContactsStep />}
-            {step === 2 && <DigestStep onSaved={() => setStepReady(true)} />}
-            {step === 3 && <AssistenteStep onComplete={onComplete} />}
-          </div>
-
-          {/* Advance button (steps 0–2) */}
-          {step < 3 && (
-            <button
-              onClick={advance}
-              disabled={!canAdvance || advancing}
-              className="w-full text-white text-sm font-medium rounded-xl py-3 disabled:opacity-40 transition-all"
-              style={{ backgroundColor: PRIMARY }}
-            >
-              {advancing ? 'Avançando…' : config.continueLabel || 'Continuar →'}
-            </button>
-          )}
-
-        </div>
+      {/* Action area */}
+      <div>
+        {step === 0 && <WhatsAppStep onConnected={() => setStepReady(true)} />}
+        {step === 1 && <ContactsStep />}
+        {step === 2 && <DigestStep onSaved={() => setStepReady(true)} />}
+        {step === 3 && <AssistenteStep onComplete={onComplete} />}
       </div>
+
+      {/* Advance button (steps 0–2) */}
+      {step < 3 && (
+        <button
+          onClick={advance}
+          disabled={!canAdvance || advancing}
+          className="w-full text-white text-sm font-medium rounded-xl py-3 disabled:opacity-40 transition-all"
+          style={{ backgroundColor: PRIMARY }}
+        >
+          {advancing ? 'Avançando…' : config.continueLabel || 'Continuar →'}
+        </button>
+      )}
+
     </div>
   )
 }

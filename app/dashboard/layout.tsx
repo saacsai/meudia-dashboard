@@ -92,17 +92,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </div>
   )
 
-  if (!onboardingCompleted) return (
-    <OnboardingView
-      userName={userName}
-      initialStep={onboardingStep}
-      onComplete={(name) => {
-        if (name) setAssistantName(name)
-        setOnboardingCompleted(true)
-      }}
-    />
-  )
-
   return (
     <div className="min-h-screen" style={{ background: '#F0F5F6' }}>
       <Sidebar
@@ -115,17 +104,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         onLogout={handleLogout}
         onEditarPerfil={() => setView('perfil')}
         onGerenciarPlano={() => setView('plano')}
+        onboardingStep={onboardingStep}
+        onboardingCompleted={onboardingCompleted}
       />
       <main className="p-6 min-h-screen" style={{ marginLeft: '256px' }}>
-        {view === 'main' && children}
-        {view === 'perfil' && (
+        {view === 'perfil' ? (
           <EditarPerfilPage
             onVoltar={() => setView('main')}
             onSaved={nome => { setUserName(nome); setView('main') }}
           />
-        )}
-        {view === 'plano' && (
+        ) : view === 'plano' ? (
           <GerenciarPlanoPage onVoltar={() => setView('main')} />
+        ) : !onboardingCompleted ? (
+          <OnboardingView
+            userName={userName}
+            initialStep={onboardingStep}
+            onComplete={(name) => {
+              if (name) setAssistantName(name)
+              setOnboardingCompleted(true)
+            }}
+          />
+        ) : (
+          children
         )}
       </main>
     </div>
