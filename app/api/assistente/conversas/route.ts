@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const user = await getAuthUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const conversationId = req.nextUrl.searchParams.get('conversation_id')
+  const source = req.nextUrl.searchParams.get('source') || 'bia'
   const supabase = db()
 
   const { data: instances } = await supabase
@@ -31,18 +31,12 @@ export async function GET(req: NextRequest) {
   const inst = instances?.[0] ?? null
   if (!inst) return NextResponse.json([])
 
-  let query = supabase
-    .from('assistant_messages')
-    .select('id, role, content, tool_calls, created_at')
+  const { data } = await supabase
+    .from('conversations')
+    .select('id, title, created_at, updated_at')
     .eq('instance_id', inst.id)
-    .eq('chat_source', 'bia')
-    .order('created_at', { ascending: true })
-    .limit(100)
+    .eq('chat_source', source)
+    .order('updated_at', { ascending: false })
 
-  if (conversationId) {
-    query = query.eq('conversation_id', conversationId)
-  }
-
-  const { data } = await query
   return NextResponse.json(data || [])
 }

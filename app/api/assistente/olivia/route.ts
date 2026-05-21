@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const user = await getAuthUser(req)
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { message } = await req.json()
+  const { message, conversation_id: convId } = await req.json()
   if (!message?.trim()) return NextResponse.json({ error: 'Mensagem vazia' }, { status: 400 })
 
   const supabase = db()
@@ -114,10 +114,22 @@ Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' 
 
   const { text, toolsUsed } = await callGemini(contents, system, inst.id, supabase)
 
+  let conversationId = convId ?? null
+  if (!conversationId) {
+    const { data: newConv } = await supabase
+      .from('conversations')
+      .insert({ instance_id: inst.id, chat_source: 'olivia', title: message.trim().slice(0, 60), updated_at: new Date().toISOString() })
+      .select('id')
+      .single()
+    conversationId = newConv?.id ?? null
+  } else {
+    await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', conversationId)
+  }
+
   await supabase.from('assistant_messages').insert([
-    { instance_id: inst.id, role: 'user', content: message.trim(), chat_source: 'olivia' },
-    { instance_id: inst.id, role: 'assistant', content: text, tool_calls: toolsUsed.length ? toolsUsed : null, chat_source: 'olivia' }
+    { instance_id: inst.id, role: 'user', content: message.trim(), chat_source: 'olivia', conversation_id: conversationId },
+    { instance_id: inst.id, role: 'assistant', content: text, tool_calls: toolsUsed.length ? toolsUsed : null, chat_source: 'olivia', conversation_id: conversationId }
   ])
 
-  return NextResponse.json({ response: text, toolsUsed })
+  return NextResponse.json({ response: text, toolsUsed, conversation_id: conversationId })
 }
