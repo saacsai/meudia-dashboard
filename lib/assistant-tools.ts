@@ -132,6 +132,44 @@ export const TOOL_DECLARATIONS = [
       },
       required: ['id']
     }
+  },
+  {
+    name: 'criar_tarefa',
+    description: 'Cria uma tarefa/Post-it no quadro do Meu Dia. Use quando o usuário mencionar um encaminhamento, algo que precisa fazer, ou quando perguntar sobre tarefas de uma reunião.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        title:        { type: 'STRING', description: 'Descrição clara e objetiva da tarefa.' },
+        priority:     { type: 'STRING', enum: ['alta', 'media', 'baixa'], description: 'Prioridade. Padrão: media.' },
+        group_name:   { type: 'STRING', description: 'Nome do grupo de origem (ex: UNISOL, Família). Opcional.' },
+        contact_name: { type: 'STRING', description: 'Nome do contato de origem. Opcional.' },
+        date:         { type: 'STRING', description: 'Data no formato YYYY-MM-DD. Omitir para hoje.' }
+      },
+      required: ['title']
+    }
+  },
+  {
+    name: 'listar_tarefas',
+    description: 'Lista as tarefas do Meu Dia. Por padrão mostra as de hoje.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        date:   { type: 'STRING', description: 'Data YYYY-MM-DD. Omitir para hoje.' },
+        status: { type: 'STRING', enum: ['pendente', 'feito', 'todas'], description: 'Filtro de status. Padrão: pendente.' }
+      }
+    }
+  },
+  {
+    name: 'concluir_tarefa',
+    description: 'Marca uma tarefa como feita ou pendente.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        id:     { type: 'STRING', description: 'ID da tarefa.' },
+        status: { type: 'STRING', enum: ['feito', 'pendente'], description: 'Novo status. Padrão: feito.' }
+      },
+      required: ['id']
+    }
   }
 ]
 
@@ -319,6 +357,94 @@ export async function executeTool(
       .eq('instance_id', instanceId)
     if (error) return { sucesso: false, erro: error.message }
     return { sucesso: true }
+  }
+
+  if (name === 'criar_tarefa') {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+    const date = String(args.date || today)
+
+    // Resolve group_id from name if provided
+    let groupId: string | null = null
+    if (args.group_name) {
+      const { data: grp } = await supabase
+        .from('contact_groups')
+        .select('id')
+        .eq('instance_id', instanceId)
+        .ilike('name', String(args.group_name))
+        .limit(1)
+        .single()
+      groupId = grp?.id ?? null
+    }
+
+    // Resolve contact_id from name if provided
+    let contactId: string | null = null
+    if (args.contact_name) {
+      const { data: ct } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('instance_id', instanceId)
+        .ilike('name', `%${String(args.contact_name)}%`)
+        .limit(1)
+        .single()
+      contactId = ct?.id ?? null
+    }
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({
+        instance_id: instanceId,
+        title: String(args.title),
+        priority: String(args.priority || 'media'),
+        origin_group_id: groupId,
+        origin_contact_id: contactId,
+        date,
+      })
+      .select('id, title, priority, date')
+      .single()
+
+    if (error) return { sucesso: false, erro: error.message }
+    return { sucesso: true, id: data.id, titulo: data.title, prioridade: data.priority, data: data.date }
+  }
+
+  if (name === 'listar_tarefas') {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+    const date = String(args.date || today)
+    const statusFilter = String(args.status || 'pendente')
+
+    let query = supabase
+      .from('tasks')
+      .select('id, title, priority, status, date, origin_group_id, contact_groups(name)')
+      .eq('instance_id', instanceId)
+      .eq('date', date)
+      .order('priority', { ascending: true }) // alta → baixa
+
+    if (statusFilter !== 'todas') query = query.eq('status', statusFilter)
+
+    const { data } = await query
+    if (!data?.length) return { total: 0, tarefas: [], aviso: 'Nenhuma tarefa encontrada.' }
+
+    return {
+      total: data.length,
+      tarefas: data.map(t => ({
+        id: t.id,
+        titulo: t.title,
+        prioridade: t.priority,
+        status: t.status,
+        grupo: (t.contact_groups as unknown as { name: string } | null)?.name ?? null,
+        data: t.date,
+      }))
+    }
+  }
+
+  if (name === 'concluir_tarefa') {
+    const status = String(args.status || 'feito')
+    const { error } = await supabase
+      .from('tasks')
+      .update({ status })
+      .eq('id', String(args.id))
+      .eq('instance_id', instanceId)
+    if (error) return { sucesso: false, erro: error.message }
+    return { sucesso: true, status }
   }
 
   return { erro: `Ferramenta desconhecida: ${name}` }

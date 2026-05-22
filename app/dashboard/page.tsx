@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import Toggle from '@/components/Toggle'
+import Link from 'next/link'
 
 const PRIMARY = '#2A5F6B'
 
@@ -15,6 +16,16 @@ interface Instance {
   persona_name: string
 }
 
+interface Task {
+  id: string
+  title: string
+  priority: 'alta' | 'media' | 'baixa'
+  status: 'pendente' | 'feito'
+  date: string
+  origin_group_id: string | null
+  contact_groups: { name: string } | null
+}
+
 interface QueueMessage {
   id: string
   contact_name: string | null
@@ -25,22 +36,30 @@ interface QueueMessage {
   received_at: string
 }
 
-const PRIORITY_COLOR: Record<string, string> = {
+const PRIORITY_LABEL: Record<string, string> = { alta: 'Alta', media: 'Média', baixa: 'Baixa' }
+const PRIORITY_COLOR: Record<string, { bg: string; border: string; dot: string }> = {
+  alta:  { bg: '#fef2f2', border: '#fecaca', dot: '#ef4444' },
+  media: { bg: '#fffbeb', border: '#fde68a', dot: '#f59e0b' },
+  baixa: { bg: '#f0fdf4', border: '#bbf7d0', dot: '#22c55e' },
+}
+const QUEUE_PRIORITY_COLOR: Record<string, string> = {
   priority: PRIMARY,
   normal: '#6b7280',
   muted: '#d1d5db',
 }
 
+const today = () => new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
+
 export default function DashboardPage() {
   const [instance, setInstance] = useState<Instance | null>(null)
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState(false)
+  const [tasks, setTasks] = useState<Task[]>([])
   const [pendentes, setPendentes] = useState(0)
   const [queue, setQueue] = useState<QueueMessage[]>([])
+  const [togglingTask, setTogglingTask] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  useEffect(() => { loadData() }, [])
 
   async function loadData() {
     const supabase = getSupabase()
@@ -57,23 +76,35 @@ export default function DashboardPage() {
 
     if (inst) {
       setInstance(inst)
-      const { count } = await supabase
-        .from('message_queue')
-        .select('*', { count: 'exact', head: true })
-        .eq('instance_id', inst.id)
-        .eq('included_in_digest', false)
-        .eq('replied', false)
-      setPendentes(count || 0)
 
-      const { data: msgs } = await supabase
-        .from('message_queue')
-        .select('id, contact_name, contact_remote_jid, contact_priority, message_summary, original_message, received_at')
-        .eq('instance_id', inst.id)
-        .eq('included_in_digest', false)
-        .eq('replied', false)
-        .order('received_at', { ascending: false })
-        .limit(50)
-      setQueue(msgs || [])
+      const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+
+      const [tasksRes, countRes, queueRes] = await Promise.all([
+        supabase
+          .from('tasks')
+          .select('id, title, priority, status, date, origin_group_id, contact_groups(name)')
+          .eq('instance_id', inst.id)
+          .eq('date', todayDate)
+          .order('priority', { ascending: true }),
+        supabase
+          .from('message_queue')
+          .select('*', { count: 'exact', head: true })
+          .eq('instance_id', inst.id)
+          .eq('included_in_digest', false)
+          .eq('replied', false),
+        supabase
+          .from('message_queue')
+          .select('id, contact_name, contact_remote_jid, contact_priority, message_summary, original_message, received_at')
+          .eq('instance_id', inst.id)
+          .eq('included_in_digest', false)
+          .eq('replied', false)
+          .order('received_at', { ascending: false })
+          .limit(50)
+      ])
+
+      setTasks((tasksRes.data as unknown as Task[]) || [])
+      setPendentes(countRes.count || 0)
+      setQueue(queueRes.data || [])
     }
     setLoading(false)
   }
@@ -92,6 +123,15 @@ export default function DashboardPage() {
     setToggling(false)
   }
 
+  async function toggleTask(task: Task) {
+    setTogglingTask(task.id)
+    const newStatus = task.status === 'pendente' ? 'feito' : 'pendente'
+    const supabase = getSupabase()
+    await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t))
+    setTogglingTask(null)
+  }
+
   if (loading) return <div className="text-sm text-gray-400">Carregando…</div>
 
   if (!instance) return (
@@ -105,56 +145,117 @@ export default function DashboardPage() {
     </div>
   )
 
+  const pendingTasks = tasks.filter(t => t.status === 'pendente')
+  const doneTasks    = tasks.filter(t => t.status === 'feito')
+
   return (
     <div className="max-w-2xl mx-auto space-y-4">
 
-      {/* Status card */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs text-gray-500 mb-1">Assistente</p>
-            <h2 className="text-xl font-bold text-gray-900">{instance.persona_name}</h2>
-            <p className="text-sm text-gray-500 mt-1">{instance.phone_number}</p>
-          </div>
-          <a href="/dashboard/conectar" className="text-xs font-medium hover:underline" style={{ color: PRIMARY }}>
-            WhatsApp →
-          </a>
+      {/* Header do dia */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900 capitalize">{today()}</h1>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {pendingTasks.length === 0
+              ? 'Nenhuma tarefa pendente'
+              : `${pendingTasks.length} tarefa${pendingTasks.length > 1 ? 's' : ''} pendente${pendingTasks.length > 1 ? 's' : ''}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div
+            className="w-2 h-2 rounded-full transition-colors"
+            style={{ backgroundColor: instance.paused ? '#d1d5db' : '#22c55e' }}
+          />
+          <Toggle value={!instance.paused} onToggle={togglePause} loading={toggling} color={PRIMARY} />
         </div>
       </div>
 
-      {/* Pause toggle */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <div
-                className="w-2 h-2 rounded-full flex-shrink-0 transition-colors duration-300"
-                style={{ backgroundColor: instance.paused ? '#d1d5db' : '#22c55e' }}
-              />
-              <p className="text-sm font-semibold text-gray-900">
-                {instance.paused ? 'IA pausada' : 'IA ativa'}
-              </p>
-            </div>
-            <p className="text-xs text-gray-500">
-              {instance.paused
-                ? 'Acumulando mensagens para o digest'
-                : `${instance.persona_name} está respondendo automaticamente`}
+      {/* Quadro de tarefas */}
+      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h2 className="text-sm font-bold text-gray-900">Meu Dia</h2>
+          <Link
+            href="/dashboard/assistente"
+            className="text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+            style={{ color: PRIMARY, background: `${PRIMARY}12` }}
+          >
+            + nova tarefa
+          </Link>
+        </div>
+
+        {tasks.length === 0 ? (
+          <div className="px-5 py-10 text-center">
+            <p className="text-sm text-gray-400 mb-3">Nenhuma tarefa para hoje.</p>
+            <p className="text-xs text-gray-400">
+              Diga para <strong>{instance.persona_name}</strong> o que precisa fazer hoje →{' '}
+              <Link href="/dashboard/assistente" className="underline" style={{ color: PRIMARY }}>
+                abrir chat
+              </Link>
             </p>
           </div>
-          <Toggle
-            value={!instance.paused}
-            onToggle={togglePause}
-            loading={toggling}
-            color={PRIMARY}
-          />
-        </div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {pendingTasks.map(task => {
+              const colors = PRIORITY_COLOR[task.priority] || PRIORITY_COLOR.media
+              return (
+                <div
+                  key={task.id}
+                  className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-gray-50"
+                >
+                  {/* Checkbox */}
+                  <button
+                    onClick={() => toggleTask(task)}
+                    disabled={togglingTask === task.id}
+                    className="mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors"
+                    style={{ borderColor: colors.dot, background: 'white' }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900 leading-snug">{task.title}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span
+                        className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+                        style={{ background: colors.bg, color: colors.dot, border: `1px solid ${colors.border}` }}
+                      >
+                        {PRIORITY_LABEL[task.priority]}
+                      </span>
+                      {task.contact_groups?.name && (
+                        <span className="text-[10px] text-gray-400">{task.contact_groups.name}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Concluídas (colapsadas) */}
+            {doneTasks.length > 0 && (
+              <div className="px-5 py-3">
+                <p className="text-xs text-gray-400 mb-2">{doneTasks.length} concluída{doneTasks.length > 1 ? 's' : ''}</p>
+                {doneTasks.map(task => (
+                  <div key={task.id} className="flex items-center gap-3 py-1.5">
+                    <button
+                      onClick={() => toggleTask(task)}
+                      disabled={togglingTask === task.id}
+                      className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                      style={{ background: PRIMARY }}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
+                        <polyline points="1.5 6 4.5 9 10.5 3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                    <p className="text-sm text-gray-400 line-through">{task.title}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Métricas */}
-      {/* Fila de mensagens */}
-      <div className="bg-white rounded-2xl border border-gray-200 p-6">
+      {/* Mensagens acumuladas */}
+      <div className="bg-white rounded-2xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-base font-bold text-gray-900">Mensagens acumuladas</h2>
+          <h2 className="text-sm font-bold text-gray-900">Mensagens acumuladas</h2>
           <span
             className="text-xs font-medium px-2 py-0.5 rounded-full text-white"
             style={{ backgroundColor: pendentes > 0 ? PRIMARY : '#9ca3af' }}
@@ -165,12 +266,12 @@ export default function DashboardPage() {
         {queue.length === 0 ? (
           <p className="text-sm text-gray-400 text-center py-4">Nenhuma mensagem na fila.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {queue.map(msg => (
               <div key={msg.id} className="flex gap-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
                 <div
-                  className="w-2 rounded-full flex-shrink-0 mt-1"
-                  style={{ backgroundColor: PRIORITY_COLOR[msg.contact_priority] || '#d1d5db', minHeight: '16px' }}
+                  className="w-1.5 rounded-full flex-shrink-0 mt-1 self-stretch"
+                  style={{ backgroundColor: QUEUE_PRIORITY_COLOR[msg.contact_priority] || '#d1d5db' }}
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
