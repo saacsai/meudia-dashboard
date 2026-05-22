@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { getSupabase } from '@/lib/supabase'
 
@@ -13,6 +13,11 @@ export default function LoginPage() {
   const [senhaConfirm, setSenhaConfirm] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [modo, setModo] = useState<'login' | 'cadastro' | 'recuperar'>('login')
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('modo') === 'cadastro') setModo('cadastro')
+  }, [])
   const [loading, setLoading] = useState(false)
   const [mensagem, setMensagem] = useState('')
   const [erro, setErro] = useState('')
