@@ -143,7 +143,7 @@ export const TOOL_DECLARATIONS = [
         priority:     { type: 'STRING', enum: ['alta', 'media', 'baixa'], description: 'Prioridade. Padrão: media.' },
         group_name:   { type: 'STRING', description: 'Nome do grupo de origem (ex: UNISOL, Família). Opcional.' },
         contact_name: { type: 'STRING', description: 'Nome do contato de origem. Opcional.' },
-        date:         { type: 'STRING', description: 'Data no formato YYYY-MM-DD. Omitir para hoje.' }
+        due_date:     { type: 'STRING', description: 'Prazo final no formato YYYY-MM-DD. Use quando o usuário mencionar um prazo ou "até dia X". Omitir se não houver prazo.' }
       },
       required: ['title']
     }
@@ -398,12 +398,13 @@ export async function executeTool(
         origin_group_id: groupId,
         origin_contact_id: contactId,
         date,
+        due_date: args.due_date ? String(args.due_date) : null,
       })
-      .select('id, title, priority, date')
+      .select('id, title, priority, date, due_date')
       .single()
 
     if (error) return { sucesso: false, erro: error.message }
-    return { sucesso: true, id: data.id, titulo: data.title, prioridade: data.priority, data: data.date }
+    return { sucesso: true, id: data.id, titulo: data.title, prioridade: data.priority, data: data.date, prazo: data.due_date ?? null }
   }
 
   if (name === 'listar_tarefas') {
@@ -413,10 +414,10 @@ export async function executeTool(
 
     let query = supabase
       .from('tasks')
-      .select('id, title, priority, status, date, origin_group_id, contact_groups(name)')
+      .select('id, title, priority, status, date, due_date, origin_group_id, contact_groups(name)')
       .eq('instance_id', instanceId)
-      .eq('date', date)
-      .order('priority', { ascending: true }) // alta → baixa
+      .lte('date', date)
+      .order('priority', { ascending: true })
 
     if (statusFilter !== 'todas') query = query.eq('status', statusFilter)
 
@@ -432,6 +433,7 @@ export async function executeTool(
         status: t.status,
         grupo: (t.contact_groups as unknown as { name: string } | null)?.name ?? null,
         data: t.date,
+        prazo: t.due_date ?? null,
       }))
     }
   }

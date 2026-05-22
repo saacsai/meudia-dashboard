@@ -22,6 +22,7 @@ interface Task {
   priority: 'alta' | 'media' | 'baixa'
   status: 'pendente' | 'feito'
   date: string
+  due_date: string | null
   origin_group_id: string | null
   contact_groups: { name: string } | null
 }
@@ -37,6 +38,17 @@ interface QueueMessage {
 }
 
 const PRIORITY_LABEL: Record<string, string> = { alta: 'Alta', media: 'Média', baixa: 'Baixa' }
+
+function dueBadge(due_date: string | null): { label: string; color: string } | null {
+  if (!due_date) return null
+  const today = new Date(); today.setHours(0,0,0,0)
+  const due = new Date(due_date + 'T00:00:00')
+  const diff = Math.round((due.getTime() - today.getTime()) / 86400000)
+  if (diff < 0)  return { label: `${Math.abs(diff)}d atrasada`, color: '#ef4444' }
+  if (diff === 0) return { label: 'Vence hoje', color: '#f59e0b' }
+  if (diff <= 3)  return { label: `${diff}d restantes`, color: '#f59e0b' }
+  return { label: `até ${new Date(due_date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`, color: '#6b7280' }
+}
 const PRIORITY_COLOR: Record<string, { bg: string; border: string; dot: string }> = {
   alta:  { bg: '#fef2f2', border: '#fecaca', dot: '#ef4444' },
   media: { bg: '#fffbeb', border: '#fde68a', dot: '#f59e0b' },
@@ -82,9 +94,9 @@ export default function DashboardPage() {
       const [tasksRes, countRes, queueRes] = await Promise.all([
         supabase
           .from('tasks')
-          .select('id, title, priority, status, date, origin_group_id, contact_groups(name)')
+          .select('id, title, priority, status, date, due_date, origin_group_id, contact_groups(name)')
           .eq('instance_id', inst.id)
-          .eq('date', todayDate)
+          .lte('date', todayDate)
           .order('priority', { ascending: true }),
         supabase
           .from('message_queue')
@@ -211,7 +223,7 @@ export default function DashboardPage() {
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-900 leading-snug">{task.title}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span
                         className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
                         style={{ background: colors.bg, color: colors.dot, border: `1px solid ${colors.border}` }}
@@ -221,6 +233,14 @@ export default function DashboardPage() {
                       {task.contact_groups?.name && (
                         <span className="text-[10px] text-gray-400">{task.contact_groups.name}</span>
                       )}
+                      {(() => {
+                        const badge = dueBadge(task.due_date)
+                        return badge ? (
+                          <span className="text-[10px] font-medium" style={{ color: badge.color }}>
+                            {badge.label}
+                          </span>
+                        ) : null
+                      })()}
                     </div>
                   </div>
                 </div>
