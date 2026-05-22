@@ -63,13 +63,23 @@ export async function GET(req: NextRequest) {
   const connected = stateValue === 'open' || stateValue === 'authenticated' || stateValue === 'connected'
 
   if (connected) {
-    // Se não tem phone salvo, tenta puxar de users.whatsapp
     if (!inst.phone_number) {
+      // 1) tenta users.whatsapp
       const { data: userData } = await supabaseAdmin()
         .from('users').select('whatsapp').eq('id', user.id).single()
-      const phone = userData?.whatsapp ? normalizePhone(userData.whatsapp) : null
+      let phone = userData?.whatsapp ? normalizePhone(userData.whatsapp) : null
+
+      // 2) se vazio, extrai ownerJid do EVO (ex: "5511999999999@s.whatsapp.net")
+      if (!phone) {
+        const ownerJid: string = state?.instance?.ownerJid ?? state?.ownerJid ?? ''
+        if (ownerJid) phone = ownerJid.split('@')[0]
+      }
+
       if (phone) {
-        await supabaseAdmin().from('instances').update({ phone_number: phone }).eq('instance_name', inst.instance_name)
+        await Promise.all([
+          supabaseAdmin().from('instances').update({ phone_number: phone }).eq('instance_name', inst.instance_name),
+          supabaseAdmin().from('users').update({ whatsapp: phone }).eq('id', user.id),
+        ])
         return NextResponse.json({ connected: true, phone, instance: inst.instance_name })
       }
     }
