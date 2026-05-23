@@ -199,8 +199,13 @@ export default function ChatWithSidebar({
   function newConversation() {
     setSidebarOpen(false)
     setCurrentConvId(null)
-    setMessages([{ role: 'assistant', content: welcomeMessage }])
-    setTimeout(() => inputRef.current?.focus(), 50)
+    setInput('')
+    setLoadingMessages(false)
+    setMessages([])
+    setTimeout(() => {
+      setMessages([{ role: 'assistant', content: welcomeMessage }])
+      inputRef.current?.focus()
+    }, 120)
   }
 
   async function deleteConversation(id: string) {
