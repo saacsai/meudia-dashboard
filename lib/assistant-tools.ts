@@ -170,6 +170,14 @@ export const TOOL_DECLARATIONS = [
       },
       required: ['id']
     }
+  },
+  {
+    name: 'pausar_agente',
+    description: 'Para de responder automaticamente no WhatsApp. Use quando o usuário pedir para parar, silenciar, desativar ou pausar o assistente.'
+  },
+  {
+    name: 'retomar_agente',
+    description: 'Volta a responder automaticamente no WhatsApp. Use quando o usuário pedir para retomar, ativar de novo ou voltar a responder.'
   }
 ]
 
@@ -447,6 +455,24 @@ export async function executeTool(
       .eq('instance_id', instanceId)
     if (error) return { sucesso: false, erro: error.message }
     return { sucesso: true, status }
+  }
+
+  if (name === 'pausar_agente') {
+    const { error } = await supabase
+      .from('instances')
+      .update({ paused: true })
+      .eq('id', instanceId)
+    if (error) return { sucesso: false, erro: error.message }
+    return { sucesso: true, mensagem: 'Assistente pausado. Você pode retomar quando quiser.' }
+  }
+
+  if (name === 'retomar_agente') {
+    const { error } = await supabase
+      .from('instances')
+      .update({ paused: false })
+      .eq('id', instanceId)
+    if (error) return { sucesso: false, erro: error.message }
+    return { sucesso: true, mensagem: 'Assistente retomado. Estou de volta!' }
   }
 
   return { erro: `Ferramenta desconhecida: ${name}` }
