@@ -374,11 +374,24 @@ export default function ChatWithSidebar({
             <p className="font-semibold text-gray-800 text-sm">{headerName}</p>
             <p className="text-xs text-gray-400">{headerSubtitle}</p>
           </div>
-          {configLink && (
-            <a href={configLink} className="ml-auto text-xs hover:underline" style={{ color: PRIMARY }}>
-              Configurar →
-            </a>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {/* Botão nova conversa — apenas mobile */}
+            <button
+              className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg transition-colors hover:opacity-80"
+              style={{ background: PRIMARY }}
+              onClick={newConversation}
+              title="Nova conversa"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+            {configLink && (
+              <a href={configLink} className="text-xs hover:underline hidden md:block" style={{ color: PRIMARY }}>
+                Configurar →
+              </a>
+            )}
+          </div>
         </div>
 
         {/* Messages */}
