@@ -138,6 +138,7 @@ export default function ChatWithSidebar({
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [currentConvId, setCurrentConvId] = useState<string | null>(null)
   const [loadingConvs, setLoadingConvs] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Messages
   const [messages, setMessages] = useState<Message[]>([])
@@ -179,6 +180,7 @@ export default function ChatWithSidebar({
   }, [messages, sending])
 
   async function selectConversation(id: string) {
+    setSidebarOpen(false)
     setCurrentConvId(id)
     setLoadingMessages(true)
     setMessages([])
@@ -195,6 +197,7 @@ export default function ChatWithSidebar({
   }
 
   function newConversation() {
+    setSidebarOpen(false)
     setCurrentConvId(null)
     setMessages([{ role: 'assistant', content: welcomeMessage }])
     setTimeout(() => inputRef.current?.focus(), 50)
@@ -294,11 +297,19 @@ export default function ChatWithSidebar({
   }
 
   return (
-    <div className="flex" style={{ height: 'calc(100vh - 48px)' }}>
+    <div className="flex relative" style={{ height: 'calc(100vh - 48px)' }}>
+
+      {/* ── Backdrop mobile ─────────────────────────────────── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 z-20 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <div
-        className="flex flex-col flex-shrink-0 border-r border-gray-200"
+        className={`flex flex-col flex-shrink-0 border-r border-gray-200 absolute inset-y-0 left-0 z-30 transition-transform duration-200 md:relative md:z-auto md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
         style={{ width: '220px', background: '#fafafa' }}
       >
         {/* Header */}
@@ -343,6 +354,16 @@ export default function ChatWithSidebar({
 
         {/* Header */}
         <div className="flex items-center gap-3 pb-4 border-b border-gray-200">
+          {/* Botão histórico — apenas mobile */}
+          <button
+            className="md:hidden flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+            onClick={() => setSidebarOpen(true)}
+            title="Conversas"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="15" y2="18"/>
+            </svg>
+          </button>
           <div
             className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
             style={{ background: PRIMARY }}
