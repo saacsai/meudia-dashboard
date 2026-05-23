@@ -137,6 +137,7 @@ export default function ChatWithSidebar({
   // Conversations
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [currentConvId, setCurrentConvId] = useState<string | null>(null)
+  const [currentConvTitle, setCurrentConvTitle] = useState<string | null>(null)
   const [loadingConvs, setLoadingConvs] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -166,7 +167,7 @@ export default function ChatWithSidebar({
     setLoadingConvs(false)
     // Auto-select most recent
     if (data.length > 0 && currentConvId === null) {
-      selectConversation(data[0].id)
+      selectConversation(data[0].id, data[0].title)
     } else if (data.length === 0) {
       setMessages([{ role: 'assistant', content: welcomeMessage }])
     }
@@ -179,9 +180,10 @@ export default function ChatWithSidebar({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, sending])
 
-  async function selectConversation(id: string) {
+  async function selectConversation(id: string, title?: string) {
     setSidebarOpen(false)
     setCurrentConvId(id)
+    setCurrentConvTitle(title ?? conversations.find(c => c.id === id)?.title ?? null)
     setLoadingMessages(true)
     setMessages([])
     const token = await getToken()
@@ -199,6 +201,7 @@ export default function ChatWithSidebar({
   function newConversation() {
     setSidebarOpen(false)
     setCurrentConvId(null)
+    setCurrentConvTitle(null)
     setInput('')
     setLoadingMessages(false)
     setMessages([])
@@ -233,6 +236,7 @@ export default function ChatWithSidebar({
       headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({ title })
     })
+    if (id === currentConvId) setCurrentConvTitle(title)
     setConversations(prev => prev.map(c => c.id === id ? { ...c, title } : c))
   }
 
@@ -263,6 +267,7 @@ export default function ChatWithSidebar({
         }
         setConversations(prev => [newConv, ...prev])
         setCurrentConvId(data.conversation_id)
+        setCurrentConvTitle(text.slice(0, 60))
       } else if (data.conversation_id) {
         // Update updated_at for sorting
         setConversations(prev => {
@@ -377,7 +382,18 @@ export default function ChatWithSidebar({
           </div>
           <div>
             <p className="font-semibold text-gray-800 text-sm">{headerName}</p>
-            <p className="text-xs text-gray-400">{headerSubtitle}</p>
+            {/* Desktop: subtítulo fixo */}
+            <p className="text-xs text-gray-400 hidden md:block">{headerSubtitle}</p>
+            {/* Mobile: título da conversa atual, abre drawer ao tocar */}
+            <button
+              className="md:hidden text-left flex items-center gap-0.5 mt-0.5"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <span className="text-[11px] truncate max-w-[140px]" style={{ color: '#2A5F6B' }}>
+                {currentConvTitle ?? 'Nova conversa'}
+              </span>
+              <span className="text-[11px] text-gray-400">›</span>
+            </button>
           </div>
           <div className="ml-auto flex items-center gap-2">
             {/* Botão nova conversa — apenas mobile */}

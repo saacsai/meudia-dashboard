@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import Toggle from '@/components/Toggle'
+import EditarPerfilPage from '@/components/EditarPerfilPage'
+import GerenciarPlanoPage from '@/components/GerenciarPlanoPage'
 
 const PRIMARY = '#2A5F6B'
 
@@ -513,8 +515,52 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
 }
 
 export default function ConfiguracoesPage() {
+  const [section, setSection] = useState<'main' | 'perfil' | 'plano'>('main')
+
+  if (section === 'perfil') {
+    return (
+      <EditarPerfilPage
+        onVoltar={() => setSection('main')}
+        onSaved={nome => {
+          window.dispatchEvent(new CustomEvent('userNameChanged', { detail: nome }))
+          setSection('main')
+        }}
+      />
+    )
+  }
+
+  if (section === 'plano') {
+    return <GerenciarPlanoPage onVoltar={() => setSection('main')} />
+  }
+
   return (
     <div className="max-w-2xl mx-auto space-y-4">
+      {/* Conta — apenas mobile, no desktop o acesso é pelo menu do avatar na sidebar */}
+      <div className="md:hidden">
+        <Section title="Conta">
+          <div className="space-y-2">
+            <button
+              onClick={() => setSection('perfil')}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              <span className="text-sm font-medium text-gray-700">Editar perfil</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </button>
+            <button
+              onClick={() => setSection('plano')}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
+            >
+              <span className="text-sm font-medium text-gray-700">Gerenciar plano</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </button>
+          </div>
+        </Section>
+      </div>
+
       <Section title="WhatsApp">
         <WhatsAppSection />
       </Section>
