@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { usePathname } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
+import BottomNav from '@/components/BottomNav'
 import EditarPerfilPage from '@/components/EditarPerfilPage'
 import GerenciarPlanoPage from '@/components/GerenciarPlanoPage'
 import OnboardingView from '@/components/OnboardingView'
@@ -101,20 +102,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen" style={{ background: '#F0F5F6' }}>
-      <Sidebar
-        logoSrc="/meudia_logo.jpg"
-        productName="MeuDIA"
+      {/* Sidebar — apenas desktop */}
+      <div className="hidden md:block">
+        <Sidebar
+          logoSrc="/meudia_logo.jpg"
+          productName="MeuDIA"
+          navItems={NAV}
+          userName={userName}
+          userEmail={userEmail}
+          primaryColor={PRIMARY}
+          onLogout={handleLogout}
+          onEditarPerfil={() => setView('perfil')}
+          onGerenciarPlano={() => setView('plano')}
+          onboardingStep={onboardingStep}
+          onboardingCompleted={onboardingCompleted}
+        />
+      </div>
+
+      {/* Bottom navigation — apenas mobile */}
+      <BottomNav
         navItems={NAV}
-        userName={userName}
-        userEmail={userEmail}
         primaryColor={PRIMARY}
-        onLogout={handleLogout}
-        onEditarPerfil={() => setView('perfil')}
-        onGerenciarPlano={() => setView('plano')}
         onboardingStep={onboardingStep}
         onboardingCompleted={onboardingCompleted}
       />
-      <main className="p-6 min-h-screen" style={{ marginLeft: '256px' }}>
+
+      <main className="p-4 md:p-6 min-h-screen pb-24 md:pb-6 md:ml-[256px]">
         {view === 'perfil' ? (
           <EditarPerfilPage
             onVoltar={() => setView('main')}
