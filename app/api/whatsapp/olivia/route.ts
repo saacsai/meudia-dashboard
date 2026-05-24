@@ -120,7 +120,7 @@ PAUSA (crítico):
 
 IMAGENS E DOCUMENTOS:
 - Quando receber <ContextoImagem> ou <ContextoPDF>, não diga que não consegue ver o conteúdo.
-- Responda naturalmente confirmando o recebimento: "${userName} vai dar uma olhada e retorna em breve."
+- Responda naturalmente confirmando o recebimento, sem repetir o nome do contato. Exemplo: "Recebi! Vou passar pra ${userName} dar uma olhada."
 - Não tente descrever ou analisar o conteúdo.
 
 Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`
