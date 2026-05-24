@@ -8,10 +8,12 @@ const PRIMARY = '#2A5F6B'
 
 interface DigestSchedule {
   id: string
-  morning_time: string
-  afternoon_time: string
-  timezone: string
+  window_times: string[] | null
+  morning_time: string | null
+  afternoon_time: string | null
   active: boolean
+  email_notify: boolean
+  email_notify_scope: 'all' | 'priority'
 }
 
 interface QueueMessage {
@@ -30,6 +32,15 @@ const PRIORITY_COLOR: Record<string, string> = {
   muted: '#d1d5db',
 }
 
+function normalizeTimes(sched: DigestSchedule): string[] {
+  if (sched.window_times?.length) return sched.window_times
+  // fallback para colunas antigas
+  const times: string[] = []
+  if (sched.morning_time) times.push(sched.morning_time.slice(0, 5))
+  if (sched.afternoon_time) times.push(sched.afternoon_time.slice(0, 5))
+  return times.length ? times : ['08:00', '17:00']
+}
+
 export default function DigestPage() {
   const [schedule, setSchedule] = useState<DigestSchedule | null>(null)
   const [queue, setQueue] = useState<QueueMessage[]>([])
@@ -37,7 +48,11 @@ export default function DigestPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [form, setForm] = useState({ morning_time: '08:00', afternoon_time: '17:00', active: true })
+
+  const [windowTimes, setWindowTimes] = useState<string[]>(['08:00', '17:00'])
+  const [active, setActive] = useState(true)
+  const [emailNotify, setEmailNotify] = useState(false)
+  const [emailScope, setEmailScope] = useState<'all' | 'priority'>('priority')
 
   useEffect(() => { loadData() }, [])
 
@@ -60,11 +75,10 @@ export default function DigestPage() {
       .single()
     if (sched) {
       setSchedule(sched)
-      setForm({
-        morning_time: sched.morning_time?.slice(0, 5) || '08:00',
-        afternoon_time: sched.afternoon_time?.slice(0, 5) || '17:00',
-        active: sched.active,
-      })
+      setWindowTimes(normalizeTimes(sched))
+      setActive(sched.active)
+      setEmailNotify(sched.email_notify ?? false)
+      setEmailScope(sched.email_notify_scope ?? 'priority')
     }
     const { data: msgs } = await supabase
       .from('message_queue')
@@ -83,14 +97,34 @@ export default function DigestPage() {
     if (!instanceId) return
     setSaving(true)
     const supabase = getSupabase()
+    const payload = {
+      window_times: windowTimes,
+      active,
+      email_notify: emailNotify,
+      email_notify_scope: emailScope,
+    }
     if (schedule) {
-      await supabase.from('digest_schedule').update(form).eq('id', schedule.id)
+      await supabase.from('digest_schedule').update(payload).eq('id', schedule.id)
     } else {
-      await supabase.from('digest_schedule').insert({ ...form, instance_id: instanceId })
+      await supabase.from('digest_schedule').insert({ ...payload, instance_id: instanceId })
     }
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
+  }
+
+  function addWindow() {
+    if (windowTimes.length >= 6) return
+    setWindowTimes(prev => [...prev, '12:00'])
+  }
+
+  function removeWindow(i: number) {
+    if (windowTimes.length <= 2) return
+    setWindowTimes(prev => prev.filter((_, idx) => idx !== i))
+  }
+
+  function updateWindow(i: number, value: string) {
+    setWindowTimes(prev => prev.map((t, idx) => idx === i ? value : t))
   }
 
   function formatTime(iso: string) {
@@ -104,50 +138,107 @@ export default function DigestPage() {
 
       {/* Horários */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6">
-        <h2 className="text-base font-bold text-gray-900 mb-1">Horários do Digest</h2>
-        <p className="text-xs text-gray-500 mb-5">Quando você vai revisar e responder as mensagens acumuladas.</p>
-        <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Período da manhã</label>
-              <input
-                type="time" value={form.morning_time}
-                onChange={e => setForm(f => ({ ...f, morning_time: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none"
-                onFocus={e => e.target.style.borderColor = PRIMARY}
-                onBlur={e => e.target.style.borderColor = ''}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Período da tarde</label>
-              <input
-                type="time" value={form.afternoon_time}
-                onChange={e => setForm(f => ({ ...f, afternoon_time: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none"
-                onFocus={e => e.target.style.borderColor = PRIMARY}
-                onBlur={e => e.target.style.borderColor = ''}
-              />
-            </div>
+        <h2 className="text-base font-bold text-gray-900 mb-1">Janelas de resposta</h2>
+        <p className="text-xs text-gray-500 mb-5">
+          Momentos em que você revisa e responde as mensagens acumuladas. Mínimo 2, máximo 6.
+        </p>
+
+        <form onSubmit={handleSave} className="space-y-5">
+          {/* Lista de janelas */}
+          <div className="space-y-2">
+            {windowTimes.map((t, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <span className="text-xs text-gray-400 w-16 flex-shrink-0">Janela {i + 1}</span>
+                <input
+                  type="time"
+                  value={t}
+                  onChange={e => updateWindow(i, e.target.value)}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none"
+                  onFocus={e => e.target.style.borderColor = PRIMARY}
+                  onBlur={e => e.target.style.borderColor = ''}
+                />
+                {windowTimes.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => removeWindow(i)}
+                    className="text-gray-400 hover:text-red-400 text-lg leading-none"
+                    title="Remover janela"
+                  >×</button>
+                )}
+              </div>
+            ))}
           </div>
 
-          <div className="flex items-center gap-3">
+          {windowTimes.length < 6 && (
+            <button
+              type="button"
+              onClick={addWindow}
+              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors"
+            >
+              + Adicionar janela
+            </button>
+          )}
+
+          <div className="flex items-center gap-3 pt-1">
             <Toggle
-              value={form.active}
-              onToggle={() => setForm(f => ({ ...f, active: !f.active }))}
+              value={active}
+              onToggle={() => setActive(v => !v)}
               color={PRIMARY}
               size="sm"
             />
             <span className="text-xs text-gray-600">
-              {form.active ? 'Digest ativo' : 'Digest desativado'}
+              {active ? 'Digest ativo' : 'Digest desativado'}
             </span>
           </div>
 
+          {/* Notificações por email */}
+          <div className="border-t border-gray-100 pt-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <Toggle
+                value={emailNotify}
+                onToggle={() => setEmailNotify(v => !v)}
+                color={PRIMARY}
+                size="sm"
+              />
+              <span className="text-xs text-gray-700 font-medium">Notificações por email</span>
+            </div>
+
+            {emailNotify && (
+              <div className="ml-11 space-y-2">
+                <p className="text-xs text-gray-500">Quais mensagens disparam o email?</p>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="email_scope"
+                    value="priority"
+                    checked={emailScope === 'priority'}
+                    onChange={() => setEmailScope('priority')}
+                    className="accent-teal-700"
+                  />
+                  <span className="text-xs text-gray-700">Somente contatos prioritários</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="email_scope"
+                    value="all"
+                    checked={emailScope === 'all'}
+                    onChange={() => setEmailScope('all')}
+                    className="accent-teal-700"
+                  />
+                  <span className="text-xs text-gray-700">Todas as mensagens da fila</span>
+                </label>
+              </div>
+            )}
+          </div>
+
           <button
-            type="submit" disabled={saving}
-            className="w-full text-white text-sm font-medium rounded-xl py-2.5 disabled:opacity-50"
+            type="submit"
+            disabled={saving}
+            className="w-full text-white text-sm font-medium rounded-xl py-2.5 disabled:opacity-50 transition-colors"
             style={{ backgroundColor: saved ? '#16a34a' : PRIMARY }}
           >
-            {saving ? 'Salvando…' : saved ? '✓ Salvo' : 'Salvar horários'}
+            {saving ? 'Salvando…' : saved ? '✓ Salvo' : 'Salvar configurações'}
           </button>
         </form>
       </div>

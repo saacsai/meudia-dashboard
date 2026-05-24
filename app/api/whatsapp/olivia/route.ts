@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { callGemini, loadMemoryBlock } from '@/lib/assistant-tools'
 import type { GeminiContent } from '@/lib/assistant-tools'
+import { sendMessageAlert } from '@/lib/email'
 
 function db() {
   const key = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 
-  const { instance_name, message, contact_name } = await req.json()
+  const { instance_name, message, contact_name, contact_jid } = await req.json()
   if (!instance_name || !message?.trim()) {
     return NextResponse.json({ error: 'instance_name e message são obrigatórios' }, { status: 400 })
   }
@@ -58,7 +59,7 @@ export async function POST(req: NextRequest) {
   const tone = toneMap[inst.persona_tone] || 'profissional e eficiente'
   const size = sizeMap[inst.persona_response_size] || 'respostas curtas'
 
-  const [historyResult, memoryBlock] = await Promise.all([
+  const [historyResult, memoryBlock, scheduleResult] = await Promise.all([
     supabase
       .from('assistant_messages')
       .select('role, content')
@@ -66,7 +67,12 @@ export async function POST(req: NextRequest) {
       .eq('chat_source', 'whatsapp')
       .order('created_at', { ascending: false })
       .limit(10),
-    loadMemoryBlock(inst.id, supabase)
+    loadMemoryBlock(inst.id, supabase),
+    supabase
+      .from('digest_schedule')
+      .select('email_notify, email_notify_scope')
+      .eq('instance_id', inst.id)
+      .single()
   ])
 
   const history: GeminiContent[] = (historyResult.data ?? [])
@@ -136,6 +142,39 @@ Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' 
     { instance_id: inst.id, role: 'user', content: message.trim(), chat_source: 'whatsapp' },
     { instance_id: inst.id, role: 'assistant', content: text, tool_calls: toolsUsed.length ? toolsUsed : null, chat_source: 'whatsapp' }
   ])
+
+  // Notificação por email
+  const emailSettings = scheduleResult.data
+  if (emailSettings?.email_notify && process.env.RESEND_API_KEY) {
+    try {
+      let shouldNotify = emailSettings.email_notify_scope === 'all'
+
+      if (!shouldNotify && emailSettings.email_notify_scope === 'priority' && contact_jid) {
+        const { data: contact } = await supabase
+          .from('contacts')
+          .select('priority')
+          .eq('instance_id', inst.id)
+          .eq('remote_jid', contact_jid)
+          .single()
+        shouldNotify = contact?.priority === 'priority'
+      }
+
+      if (shouldNotify) {
+        const { data: { user: authUser } } = await supabase.auth.admin.getUserById(inst.user_id)
+        if (authUser?.email) {
+          await sendMessageAlert({
+            to: authUser.email,
+            userName,
+            contactName: contact_name || 'Contato',
+            message: message.trim(),
+            isPriority: emailSettings.email_notify_scope === 'priority',
+          })
+        }
+      }
+    } catch {
+      // falha silenciosa — não bloqueia a resposta
+    }
+  }
 
   return NextResponse.json({ response: text })
 }
