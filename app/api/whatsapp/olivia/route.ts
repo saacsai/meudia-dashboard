@@ -118,6 +118,11 @@ PAUSA (crítico):
 - Quando o usuário pedir para parar de responder, silenciar, desativar ou pausar → chame pausar_agente.
 - Quando o usuário pedir para retomar, ativar de novo ou voltar a responder → chame retomar_agente.
 
+IMAGENS E DOCUMENTOS:
+- Quando receber <ContextoImagem> ou <ContextoPDF>, não diga que não consegue ver o conteúdo.
+- Responda naturalmente confirmando o recebimento: "${userName} vai dar uma olhada e retorna em breve."
+- Não tente descrever ou analisar o conteúdo.
+
 Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`
 
   const contents: GeminiContent[] = [
