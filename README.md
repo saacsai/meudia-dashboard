@@ -101,10 +101,39 @@ Executar na ordem no SQL Editor:
 
 | Fluxo | Arquivo | Status |
 |---|---|---|
-| Fluxo 1 — Mensagem recebida (Olivia + BIA Vendedora) | `MCP_SAACS/Projeto MeuDIA/MeuDIA - Fluxo1.json` | em revisão |
+| Fluxo 1 — Mensagem recebida (Olivia + BIA Vendedora) | `MCP_SAACS/Projeto MeuDIA/MeuDIA - Fluxo1.json` | ✅ implementado |
 | Fluxo 2 — Digest cron (manhã + tarde) | — | pendente |
 
-Arquitetura e prompts dos fluxos: `saacs-brain/products/meudia/prompts/`
+Arquitetura do Fluxo 1:
+```
+Buffer Redis → Busca Instância → PAUSE MODE → Busca Contato
+→ first_response_sent = true  → Olivia direto
+→ first_response_sent = false → Redis GET {jid}_bia_pending
+    TRUE  → Redis SET (renova TTL 600s) → BIA
+    FALSE → Classificador LEAD/NORMAL
+              LEAD   → Redis SET TTL 600s → BIA
+              NORMAL → Olivia
+→ Code node divide resposta ≤240 chars → Loop → EVO send
+```
+
+---
+
+## Estado atual (2026-05-24)
+
+### Concluído ✅
+- Onboarding conversacional (`OnboardingView.tsx` — chat BIA phases 0–5)
+- Quadro de Tarefas Meu Dia (Post-it 2026) com ferramentas Olivia
+- n8n Fluxo 1 implementado e validado
+- Endpoints `/api/whatsapp/bia` e `/api/whatsapp/olivia`
+- Ferramentas Olivia: `pausar_agente`, `retomar_agente`
+- UX mobile: título conversa no header, botão `+`, seção Conta em Configurações
+- `INTERNAL_API_KEY` configurada no `.env.local` e Vercel
+
+### Pendente ⏳
+- Exportar JSON atualizado do n8n → substituir `MCP_SAACS/Projeto MeuDIA/MeuDIA - Fluxo1.json`
+- n8n Fluxo 2 (digest cron manhã + tarde)
+- Ajuste de prompt da BIA Vendedora (tom + emojis)
+- UX/textos do onboarding (revisão futura)
 
 ---
 
