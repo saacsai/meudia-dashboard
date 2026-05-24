@@ -1,7 +1,5 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 export async function sendMessageAlert({
   to,
   userName,
@@ -15,6 +13,7 @@ export async function sendMessageAlert({
   message: string
   isPriority: boolean
 }) {
+  const resend = new Resend(process.env.RESEND_API_KEY)
   const subject = isPriority
     ? `⚡ Mensagem prioritária de ${contactName}`
     : `Nova mensagem de ${contactName} — MeuDIA`
