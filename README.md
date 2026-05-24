@@ -53,6 +53,8 @@ SUPABASE_SERVICE_ROLE_KEY=
 GEMINI_API_KEY=
 EVOLUTION_API_URL=https://evolution.saacs.com.br
 EVOLUTION_API_KEY=CA03A237-2DCC-4684-8989-0E615AE6220B
+INTERNAL_API_KEY=     # autenticação n8n → Next.js
+RESEND_API_KEY=       # notificações por email (domínio meudia.saacs.com.br verificado)
 CRON_SECRET=          # header de autenticação para endpoints de cron
 ```
 
@@ -94,6 +96,22 @@ Executar na ordem no SQL Editor:
 6. `supabase_migration_grupos_contatos.sql`
 7. `supabase_migration_tasks.sql`
 8. `supabase_migration_tasks_duedate.sql`
+9. `contact_groups`: adicionar coluna `description text` (campo objetivo do grupo)
+10. `digest_schedule`: adicionar `window_times text[]`, `email_notify boolean`, `email_notify_scope text`
+
+```sql
+-- Migration 9
+ALTER TABLE contact_groups ADD COLUMN IF NOT EXISTS description text;
+
+-- Migration 10
+ALTER TABLE digest_schedule
+  ADD COLUMN IF NOT EXISTS window_times text[],
+  ADD COLUMN IF NOT EXISTS email_notify boolean DEFAULT false,
+  ADD COLUMN IF NOT EXISTS email_notify_scope text DEFAULT 'priority';
+UPDATE digest_schedule
+SET window_times = ARRAY[COALESCE(morning_time,'08:00'), COALESCE(afternoon_time,'17:00')]
+WHERE window_times IS NULL;
+```
 
 ---
 
@@ -102,7 +120,7 @@ Executar na ordem no SQL Editor:
 | Fluxo | Arquivo | Status |
 |---|---|---|
 | Fluxo 1 — Mensagem recebida (Olivia + BIA Vendedora) | `MCP_SAACS/Projeto MeuDIA/MeuDIA - Fluxo1.json` | ✅ implementado |
-| Fluxo 2 — Digest cron (manhã + tarde) | — | pendente |
+| Fluxo 2 — Digest cron (janelas configuráveis) | — | ⏳ pendente |
 
 Arquitetura do Fluxo 1:
 ```
@@ -123,17 +141,28 @@ Buffer Redis → Busca Instância → PAUSE MODE → Busca Contato
 ### Concluído ✅
 - Onboarding conversacional (`OnboardingView.tsx` — chat BIA phases 0–5)
 - Quadro de Tarefas Meu Dia (Post-it 2026) com ferramentas Olivia
-- n8n Fluxo 1 implementado e validado
+- n8n Fluxo 1 implementado e validado (texto, áudio, imagem, PDF)
 - Endpoints `/api/whatsapp/bia` e `/api/whatsapp/olivia`
 - Ferramentas Olivia: `pausar_agente`, `retomar_agente`
 - UX mobile: título conversa no header, botão `+`, seção Conta em Configurações
-- `INTERNAL_API_KEY` configurada no `.env.local` e Vercel
+- `INTERNAL_API_KEY` e `RESEND_API_KEY` configuradas no Vercel
+- Post-its seguem cor do grupo (borda esquerda + chip colorido)
+- Grupos de contatos com campo "Objetivo" (descrição livre)
+- Janelas de resposta variáveis (2–6 por dia, configuráveis na tela)
+- Notificações por email via Resend: toggle + escopo (prioritários / todas)
+  - Domínio `meudia.saacs.com.br` verificado no Resend
+  - n8n passa `contact_jid` para check de prioridade no scope "somente prioritários"
+- Base de conhecimento da BIA: `saacs-brain/products/meudia/bia-knowledge-base.md`
 
 ### Pendente ⏳
 - Exportar JSON atualizado do n8n → substituir `MCP_SAACS/Projeto MeuDIA/MeuDIA - Fluxo1.json`
-- n8n Fluxo 2 (digest cron manhã + tarde)
-- Ajuste de prompt da BIA Vendedora (tom + emojis)
-- UX/textos do onboarding (revisão futura)
+- n8n Fluxo 2 (digest cron — ler `window_times` do banco)
+- Revisão e atualização dos 4 prompts Next.js com base no knowledge base
+- Onboarding conversacional: revisar UX/textos (fases se misturam)
+- Painel visual de consumo de créditos no dashboard
+- Controle de créditos no Supabase (modelagem + lógica de bloqueio)
+- Email proativo em tentativas de ligação bloqueadas (cenário 2 do knowledge base)
+- MCP Cowork (ADR criado em `saacs-brain/decisions/`)
 
 ---
 
