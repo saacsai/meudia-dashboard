@@ -81,6 +81,7 @@ export default function ContatosPage() {
   const [showGroups, setShowGroups] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupColor, setNewGroupColor] = useState(GROUP_COLORS[0])
+  const [newGroupDescription, setNewGroupDescription] = useState('')
   const [creatingGroup, setCreatingGroup] = useState(false)
   const [groupError, setGroupError] = useState<string | null>(null)
 
@@ -279,12 +280,13 @@ export default function ContatosPage() {
     const res = await fetch('/api/contatos/grupos', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newGroupName.trim(), color: newGroupColor }),
+      body: JSON.stringify({ name: newGroupName.trim(), color: newGroupColor, description: newGroupDescription.trim() || null }),
     })
     const data = await res.json()
     if (data.id) {
       setGroups(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
       setNewGroupName('')
+      setNewGroupDescription('')
     } else {
       setGroupError(data.error || 'Erro ao criar grupo')
     }
@@ -450,38 +452,49 @@ export default function ContatosPage() {
             )}
 
             {/* Criar novo grupo */}
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="text"
-                placeholder="Nome do grupo (ex: REDE BIOSOL)"
-                value={newGroupName}
-                onChange={e => setNewGroupName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && createGroup()}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none"
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Nome do grupo (ex: REDE BIOSOL)"
+                  value={newGroupName}
+                  onChange={e => setNewGroupName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && createGroup()}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm outline-none"
+                  onFocus={e => (e.target.style.borderColor = PRIMARY)}
+                  onBlur={e => (e.target.style.borderColor = '')}
+                />
+                <div className="flex gap-1">
+                  {GROUP_COLORS.map(c => (
+                    <button
+                      key={c}
+                      onClick={() => setNewGroupColor(c)}
+                      className="w-5 h-5 rounded-full border-2 transition-all"
+                      style={{
+                        backgroundColor: c,
+                        borderColor: newGroupColor === c ? '#111' : 'transparent',
+                      }}
+                    />
+                  ))}
+                </div>
+                <button
+                  onClick={createGroup}
+                  disabled={creatingGroup || !newGroupName.trim()}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                  style={{ backgroundColor: PRIMARY }}
+                >
+                  {creatingGroup ? '…' : 'Criar'}
+                </button>
+              </div>
+              <textarea
+                placeholder="Objetivo do grupo (opcional) — ex: Fornecedores da obra do galpão central, previsão até agosto"
+                value={newGroupDescription}
+                onChange={e => setNewGroupDescription(e.target.value)}
+                rows={2}
+                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs text-gray-700 outline-none resize-none"
                 onFocus={e => (e.target.style.borderColor = PRIMARY)}
                 onBlur={e => (e.target.style.borderColor = '')}
               />
-              <div className="flex gap-1">
-                {GROUP_COLORS.map(c => (
-                  <button
-                    key={c}
-                    onClick={() => setNewGroupColor(c)}
-                    className="w-5 h-5 rounded-full border-2 transition-all"
-                    style={{
-                      backgroundColor: c,
-                      borderColor: newGroupColor === c ? '#111' : 'transparent',
-                    }}
-                  />
-                ))}
-              </div>
-              <button
-                onClick={createGroup}
-                disabled={creatingGroup || !newGroupName.trim()}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
-                style={{ backgroundColor: PRIMARY }}
-              >
-                {creatingGroup ? '…' : 'Criar'}
-              </button>
             </div>
             {groupError && <p className="text-xs text-red-600">{groupError}</p>}
           </div>

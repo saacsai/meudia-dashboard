@@ -24,7 +24,7 @@ interface Task {
   date: string
   due_date: string | null
   origin_group_id: string | null
-  contact_groups: { name: string } | null
+  contact_groups: { name: string; color: string } | null
 }
 
 interface QueueMessage {
@@ -94,7 +94,7 @@ export default function DashboardPage() {
       const [tasksRes, countRes, queueRes] = await Promise.all([
         supabase
           .from('tasks')
-          .select('id, title, priority, status, date, due_date, origin_group_id, contact_groups(name)')
+          .select('id, title, priority, status, date, due_date, origin_group_id, contact_groups(name, color)')
           .eq('instance_id', inst.id)
           .lte('date', todayDate)
           .order('priority', { ascending: true }),
@@ -209,10 +209,16 @@ export default function DashboardPage() {
           <div className="divide-y divide-gray-50">
             {pendingTasks.map(task => {
               const colors = PRIORITY_COLOR[task.priority] || PRIORITY_COLOR.media
+              const groupColor = task.contact_groups?.color
               return (
                 <div
                   key={task.id}
-                  className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-gray-50"
+                  className="flex items-start gap-3 py-3.5 transition-colors hover:bg-gray-50"
+                  style={{
+                    paddingLeft: groupColor ? '17px' : '20px',
+                    paddingRight: '20px',
+                    borderLeft: groupColor ? `3px solid ${groupColor}` : undefined,
+                  }}
                 >
                   {/* Checkbox */}
                   <button
@@ -231,7 +237,12 @@ export default function DashboardPage() {
                         {PRIORITY_LABEL[task.priority]}
                       </span>
                       {task.contact_groups?.name && (
-                        <span className="text-[10px] text-gray-400">{task.contact_groups.name}</span>
+                        <span
+                          className="text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white"
+                          style={{ backgroundColor: task.contact_groups.color }}
+                        >
+                          {task.contact_groups.name}
+                        </span>
                       )}
                       {(() => {
                         const badge = dueBadge(task.due_date)
