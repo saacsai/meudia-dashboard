@@ -28,8 +28,8 @@ Produto SAACS.AI · [meudia.saacs.com.br](https://meudia.saacs.com.br)
 | Cadastro (deep-link) | https://meudia.saacs.com.br/login?modo=cadastro |
 | Evolution API (interno Docker) | http://evolution:8080 |
 | VPS SAACS | `82.112.244.174` — SSH: `root@82.112.244.174` |
-| Supabase projeto | `zeigxaekyltzitcpefli` |
-| Supabase SQL Editor | https://app.supabase.com/project/zeigxaekyltzitcpefli/sql |
+| Supabase projeto | `umlmqjkahrobfnigltil` |
+| Supabase SQL Editor | https://app.supabase.com/project/umlmqjkahrobfnigltil/sql |
 
 ---
 
@@ -136,7 +136,7 @@ Buffer Redis → Busca Instância → PAUSE MODE → Busca Contato
 
 ---
 
-## Estado atual (2026-05-24)
+## Estado atual (2026-05-25)
 
 ### Concluído ✅
 - Onboarding conversacional (`OnboardingView.tsx` — chat BIA phases 0–5)
@@ -153,10 +153,18 @@ Buffer Redis → Busca Instância → PAUSE MODE → Busca Contato
   - Domínio `meudia.saacs.com.br` verificado no Resend
   - n8n passa `contact_jid` para check de prioridade no scope "somente prioritários"
 - Base de conhecimento da BIA: `saacs-brain/products/meudia/bia-knowledge-base.md`
+- Badge de notificações no Sidebar (contatos prioritários não lidos)
+- n8n Fluxo 2 implementado e validado (digest cron multi-instância via Loop Over Items)
+  - Filtro por `window_times` em JavaScript (Code node)
+  - Geração de resumo via Gemini 2.5 Flash
+  - Envio via Evolution API para número principal ou `personal_channel` (segundo número)
+- Campo "Segundo número" em Configurações → salva em `instances.personal_channel`
+- Fix: `instances.phone_number` sincroniza automaticamente ao salvar perfil com WhatsApp
+- Schema Supabase documentado em memória persistente
 
 ### Pendente ⏳
-- Exportar JSON atualizado do n8n → substituir `MCP_SAACS/Projeto MeuDIA/MeuDIA - Fluxo1.json`
-- n8n Fluxo 2 (digest cron — ler `window_times` do banco)
+- Exportar JSONs atualizados do n8n → `MCP_SAACS/Projeto MeuDIA/MeuDIA - Fluxo1.json` e `Fluxo2.json`
+- Ajustar onboarding (DigestStep): explicar canais de entrega do digest (dashboard, email, segundo número)
 - Revisão e atualização dos 4 prompts Next.js com base no knowledge base
 - Onboarding conversacional: revisar UX/textos (fases se misturam)
 - Painel visual de consumo de créditos no dashboard
