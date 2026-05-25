@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
   const tone = toneMap[inst.persona_tone] || 'profissional e eficiente'
   const size = sizeMap[inst.persona_response_size] || 'respostas curtas'
 
-  const [historyResult, memoryBlock, scheduleResult] = await Promise.all([
+  const [historyResult, memoryBlock, scheduleResult, contactResult] = await Promise.all([
     supabase
       .from('assistant_messages')
       .select('role, content')
@@ -77,12 +77,30 @@ export async function POST(req: NextRequest) {
       .from('digest_schedule')
       .select('email_notify, email_notify_scope')
       .eq('instance_id', inst.id)
-      .single()
+      .single(),
+    contact_jid
+      ? supabase
+          .from('contacts')
+          .select('priority, first_replied_at')
+          .eq('instance_id', inst.id)
+          .eq('remote_jid', contact_jid)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
 
   const history: GeminiContent[] = (historyResult.data ?? [])
     .reverse()
     .map(r => ({ role: r.role === 'assistant' ? 'model' : 'user', parts: [{ text: r.content }] }))
+
+  const contact = contactResult.data
+  const contactFirstName = contact_name ? contact_name.split(' ')[0] : ''
+
+  // Determina tipo de contato para saudação
+  const isFirstContact = !contact?.first_replied_at
+  const isContinuation = history.length > 0
+  const greetingBlock = isContinuation ? '' : isFirstContact
+    ? `SAUDAÇÃO (obrigatório nesta primeira mensagem): Comece com "Oi${contactFirstName ? ` ${contactFirstName}` : ''}! Tudo bem? Eu sou a ${assistantName}, assistente do ${userName}." — em seguida responda normalmente.`
+    : `SAUDAÇÃO (obrigatório nesta primeira mensagem): Comece com "Oi${contactFirstName ? ` ${contactFirstName}` : ''}! Aqui é a ${assistantName} falando, tudo bem?" — em seguida responda normalmente.`
 
   const personaBase = inst.persona_description
     ? inst.persona_description
@@ -100,12 +118,16 @@ ${memoryBlock}
 O MeuDIA está gerenciando o WhatsApp de ${userName} enquanto ele foca no que importa.
 Você está respondendo pelo WhatsApp — mantenha mensagens curtas e naturais para o canal.
 ${senderLabel}
+${greetingBlock}
 
-COMO VOCÊ AGE:
-- Use o nome ${userName} com naturalidade, não em toda frase.
-- Confirme ações de forma natural — nunca mecanicamente.
-- Nunca termine com "Posso ajudar em mais alguma coisa?" ou frases de atendente.
-- Quando executar múltiplas ações, confirme todas de uma vez ao final.
+TOM E ESTILO:
+- Profissional e humano. Linguagem simples, direta, sem floreios.
+- Emojis com moderação — apenas para humanizar, nunca em excesso. Prefira reservar para fechamentos.
+- Não use expressões de atendente ("Com certeza!", "Claro!", "Fico feliz em ajudar!").
+- Quando o contato se despedir ou agradecer: encerre com algo como "Até mais! Fico à disposição! 😊" — sem usar esse fechamento em toda mensagem.
+- Use o nome do contato com naturalidade, não em toda frase.
+- Confirme ações de forma natural, nunca mecanicamente.
+
 REGRAS DE MEMÓRIA (crítico):
 - Quando o usuário disser "lembra que...", "anota que...", "guarda que..." ou qualquer variação → chame salvar_memoria IMEDIATAMENTE, antes de responder.
 - NUNCA diga que salvou algo sem ter chamado salvar_memoria e recebido { sucesso: true }.
@@ -131,7 +153,7 @@ PAUSA (crítico):
 
 IMAGENS E DOCUMENTOS:
 - Quando receber <ContextoImagem> ou <ContextoPDF>, não diga que não consegue ver o conteúdo.
-- Responda naturalmente confirmando o recebimento, sem repetir o nome do contato. Exemplo: "Recebi! Vou passar pra ${userName} dar uma olhada."
+- Responda naturalmente confirmando o recebimento. Exemplo: "Recebi! Vou passar pra ${userName} dar uma olhada."
 - Não tente descrever ou analisar o conteúdo.
 
 Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}.`
@@ -147,6 +169,16 @@ Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' 
     { instance_id: inst.id, role: 'user', content: message.trim(), chat_source: 'whatsapp' },
     { instance_id: inst.id, role: 'assistant', content: text, tool_calls: toolsUsed.length ? toolsUsed : null, chat_source: 'whatsapp' }
   ])
+
+  // Marca primeiro contato respondido
+  if (contact_jid && isFirstContact) {
+    supabase
+      .from('contacts')
+      .update({ first_replied_at: new Date().toISOString() })
+      .eq('instance_id', inst.id)
+      .eq('remote_jid', contact_jid)
+      .then(() => {})
+  }
 
   // Débito de créditos (fire-and-forget)
   debitCredits({
@@ -165,13 +197,7 @@ Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' 
     try {
       let shouldNotify = emailSettings.email_notify_scope === 'all'
 
-      if (!shouldNotify && emailSettings.email_notify_scope === 'priority' && contact_jid) {
-        const { data: contact } = await supabase
-          .from('contacts')
-          .select('priority')
-          .eq('instance_id', inst.id)
-          .eq('remote_jid', contact_jid)
-          .single()
+      if (!shouldNotify && emailSettings.email_notify_scope === 'priority') {
         shouldNotify = contact?.priority === 'priority'
       }
 
