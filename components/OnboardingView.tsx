@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { getSupabase } from '@/lib/supabase'
 
 const PRIMARY = '#2A5F6B'
+const VIDEO_URL = '' // Substituir pela URL do YouTube ou MP4 quando gravar
 const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none transition-colors'
 
 async function getToken() {
@@ -11,35 +12,12 @@ async function getToken() {
   return session?.access_token || ''
 }
 
-const WARNING_BULLETS = [
-  'O MeuDIA vai cuidar do seu WhatsApp enquanto você foca no que importa.',
-  'Você tem controle total — desconecte quando quiser, sem perder nenhum dado.',
-  'Para funcionar de verdade, você precisa confiar no sistema. Se delegar mas ficar checando cada mensagem que entra, o efeito se perde.',
-  'Sua assistente gerencia expectativa, não decisões. Ela não responde, não resolve e não decide nada por você — a menos que você configure explicitamente.',
-]
-
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 
 function BiaAvatar() {
   return (
     <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style={{ background: PRIMARY }}>
       BI
-    </div>
-  )
-}
-
-function ReadCard({ bullets }: { bullets: string[] }) {
-  return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2.5">
-      <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Leia com atenção</p>
-      <ul className="space-y-2.5">
-        {bullets.map((b, i) => (
-          <li key={i} className="flex items-start gap-2 text-sm text-gray-700 leading-relaxed">
-            <span className="text-amber-500 mt-0.5 flex-shrink-0">—</span>
-            <span>{b}</span>
-          </li>
-        ))}
-      </ul>
     </div>
   )
 }
@@ -52,6 +30,158 @@ function TypingIndicator() {
         {[0, 1, 2].map(i => (
           <span key={i} className="w-1.5 h-1.5 rounded-full animate-bounce" style={{ background: PRIMARY, animationDelay: `${i * 0.15}s` }} />
         ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Video Widget ─────────────────────────────────────────────────────────────
+
+function VideoWidget({ url }: { url: string }) {
+  if (!url) {
+    return (
+      <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-6 text-center w-full max-w-sm">
+        <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center mx-auto mb-3">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+        </div>
+        <p className="text-sm text-gray-500 font-medium">Vídeo de boas-vindas</p>
+        <p className="text-xs text-gray-400 mt-1">Em breve</p>
+      </div>
+    )
+  }
+  const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([^&\n?#]+)/)
+  if (ytMatch) {
+    return (
+      <div className="rounded-xl overflow-hidden w-full max-w-sm" style={{ aspectRatio: '16/9' }}>
+        <iframe
+          src={`https://www.youtube.com/embed/${ytMatch[1]}`}
+          className="w-full h-full"
+          allowFullScreen
+          title="Boas-vindas MeuDIA"
+        />
+      </div>
+    )
+  }
+  return <video src={url} controls className="w-full max-w-sm rounded-xl" />
+}
+
+// ─── Acceptance Widget ────────────────────────────────────────────────────────
+
+function AcceptanceWidget({ onAccepted }: { onAccepted: () => void }) {
+  const [checkedTerms, setCheckedTerms] = useState(false)
+  const [checkedPrivacy, setCheckedPrivacy] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [accepted, setAccepted] = useState(false)
+
+  async function handleAccept() {
+    if (!checkedTerms || !checkedPrivacy || saving) return
+    setSaving(true)
+    try {
+      const sb = getSupabase()
+      const { data: { session } } = await sb.auth.getSession()
+      if (session) {
+        const { data: inst } = await sb.from('instances')
+          .select('id').eq('user_id', session.user.id).eq('active', true).single()
+        if (inst) {
+          await sb.from('instances')
+            .update({ terms_accepted_at: new Date().toISOString() })
+            .eq('id', inst.id)
+        }
+      }
+      setAccepted(true)
+      onAccepted()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (accepted) {
+    return (
+      <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        Aceite confirmado
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3 w-full max-w-sm">
+      {/* Parte 1: Como funciona */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-2.5">Como o sistema funciona</p>
+        <ul className="space-y-2">
+          {[
+            'O MeuDIA gerencia suas mensagens, não as decide por você.',
+            'Você mantém controle total — desconecte quando quiser, sem perder dados.',
+            'Sua assistente gerencia expectativas. Você decide o que responder e quando.',
+            'Para funcionar de verdade, confie no sistema. Delegar e continuar checando tudo anula o efeito.',
+          ].map((b, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-gray-700 leading-snug">
+              <span className="text-amber-500 mt-0.5 flex-shrink-0">—</span>
+              <span>{b}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Parte 2: Proteção de dados */}
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <p className="text-[10px] font-bold text-blue-700 uppercase tracking-wider mb-2.5">Seus dados estão protegidos</p>
+        <ul className="space-y-2">
+          {[
+            'Mensagens e contatos ficam no Supabase — infraestrutura enterprise (AWS, SOC 2 Type 2). Mais segura do que qualquer servidor próprio de startup.',
+            'A SAACS não lê suas mensagens. Elas são processadas pela IA e armazenadas com criptografia.',
+            'Você pode solicitar a exclusão completa dos seus dados a qualquer momento.',
+          ].map((b, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-gray-700 leading-snug">
+              <span className="text-blue-500 mt-0.5 flex-shrink-0">—</span>
+              <span>{b}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Parte 3: Aceite legal */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Aceite</p>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={checkedTerms}
+            onChange={e => setCheckedTerms(e.target.checked)}
+            className="mt-0.5 flex-shrink-0 accent-teal-700"
+          />
+          <span className="text-sm text-gray-700">
+            Li e concordo com os{' '}
+            <a href="https://saacs.com.br/termos-de-uso/" target="_blank" rel="noopener noreferrer"
+              className="underline font-medium" style={{ color: PRIMARY }}>Termos de Uso</a>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={checkedPrivacy}
+            onChange={e => setCheckedPrivacy(e.target.checked)}
+            className="mt-0.5 flex-shrink-0 accent-teal-700"
+          />
+          <span className="text-sm text-gray-700">
+            Li e concordo com a{' '}
+            <a href="https://saacs.com.br/politica-de-privacidade/" target="_blank" rel="noopener noreferrer"
+              className="underline font-medium" style={{ color: PRIMARY }}>Política de Privacidade</a>
+          </span>
+        </label>
+        <button
+          onClick={handleAccept}
+          disabled={!checkedTerms || !checkedPrivacy || saving}
+          className="w-full text-white text-sm font-medium rounded-xl py-2.5 disabled:opacity-40 transition-all"
+          style={{ backgroundColor: PRIMARY }}
+        >
+          {saving ? 'Confirmando…' : 'Confirmar e continuar →'}
+        </button>
       </div>
     </div>
   )
@@ -195,9 +325,30 @@ function WhatsAppStep({ onConnected }: { onConnected: () => void }) {
 
 function ContactsStep() {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-2 text-sm text-gray-600">
-      <p>Seus contatos aparecem automaticamente em <strong>Contatos</strong> conforme as mensagens chegam.</p>
-      <p>Quando quiser organizar, acesse a aba diretamente ou peça à sua assistente no chat — ela pode criar grupos, definir prioridades e mais.</p>
+    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 w-full max-w-sm">
+      <p className="text-sm text-gray-700">
+        Conforme as mensagens chegam, seus contatos aparecem automaticamente na aba <strong>Contatos</strong>. Você também pode importar em lote ou cadastrar manualmente.
+      </p>
+      <p className="text-sm text-gray-700">Cada contato tem uma <strong>prioridade</strong> que define como sua assistente age:</p>
+      <div className="space-y-2.5">
+        <div className="flex items-start gap-2.5">
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-700 flex-shrink-0 mt-0.5">Prioridade</span>
+          <span className="text-xs text-gray-600 leading-relaxed">Você é notificado por email imediatamente. Sua assistente responde com atenção redobrada.</span>
+        </div>
+        <div className="flex items-start gap-2.5">
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 flex-shrink-0 mt-0.5">Normal</span>
+          <span className="text-xs text-gray-600 leading-relaxed">Fluxo padrão. Mensagens acumulam no digest e você decide quando ver.</span>
+        </div>
+        <div className="flex items-start gap-2.5">
+          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-500 flex-shrink-0 mt-0.5">Silenciado</span>
+          <span className="text-xs text-gray-600 leading-relaxed">Sua assistente responde, mas você não é notificado. Ideal para grupos de baixa relevância.</span>
+        </div>
+      </div>
+      <div className="pt-2 border-t border-gray-100">
+        <p className="text-xs text-gray-500 leading-relaxed">
+          Você também pode criar <strong>grupos de contatos</strong> por contexto — clientes, fornecedores, equipe — e pedir à sua assistente para gerenciar por grupo.
+        </p>
+      </div>
     </div>
   )
 }
@@ -205,7 +356,7 @@ function ContactsStep() {
 // ─── Janelas de resposta ──────────────────────────────────────────────────────
 
 function DigestStep({ onSaved }: { onSaved: () => void }) {
-  const [form, setForm] = useState({ morning_time: '08:00', afternoon_time: '17:00' })
+  const [windowTimes, setWindowTimes] = useState<string[]>(['08:00', '17:00'])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [instanceId, setInstanceId] = useState<string | null>(null)
@@ -219,10 +370,15 @@ function DigestStep({ onSaved }: { onSaved: () => void }) {
       const { data: inst } = await sb.from('instances').select('id').eq('user_id', session.user.id).eq('active', true).single()
       if (!inst) return
       setInstanceId(inst.id)
-      const { data: sched } = await sb.from('digest_schedule').select('id, morning_time, afternoon_time').eq('instance_id', inst.id).single()
+      const { data: sched } = await sb.from('digest_schedule')
+        .select('id, window_times, morning_time, afternoon_time')
+        .eq('instance_id', inst.id).single()
       if (sched) {
         setScheduleId(sched.id)
-        setForm({ morning_time: sched.morning_time?.slice(0, 5) || '08:00', afternoon_time: sched.afternoon_time?.slice(0, 5) || '17:00' })
+        const times = sched.window_times?.length
+          ? sched.window_times
+          : [sched.morning_time?.slice(0, 5) || '08:00', sched.afternoon_time?.slice(0, 5) || '17:00']
+        setWindowTimes(times)
       }
     }
     load()
@@ -232,11 +388,12 @@ function DigestStep({ onSaved }: { onSaved: () => void }) {
     if (!instanceId) return
     setSaving(true)
     const sb = getSupabase()
-    const payload = { ...form, active: true, instance_id: instanceId }
     if (scheduleId) {
-      await sb.from('digest_schedule').update(form).eq('id', scheduleId)
+      await sb.from('digest_schedule').update({ window_times: windowTimes }).eq('id', scheduleId)
     } else {
-      const { data } = await sb.from('digest_schedule').insert(payload).select('id').single()
+      const { data } = await sb.from('digest_schedule')
+        .insert({ window_times: windowTimes, active: true, instance_id: instanceId })
+        .select('id').single()
       if (data?.id) setScheduleId(data.id)
     }
     setSaving(false)
@@ -245,17 +402,24 @@ function DigestStep({ onSaved }: { onSaved: () => void }) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Janela da manhã</label>
-          <input type="time" value={form.morning_time} onChange={e => setForm(f => ({ ...f, morning_time: e.target.value }))} className={inputClass} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''} />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Janela da tarde</label>
-          <input type="time" value={form.afternoon_time} onChange={e => setForm(f => ({ ...f, afternoon_time: e.target.value }))} className={inputClass} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''} />
-        </div>
+    <div className="space-y-3 w-full max-w-sm">
+      <p className="text-xs text-gray-500">Horários em que você recebe o resumo das mensagens acumuladas:</p>
+      <div className="space-y-2">
+        {windowTimes.map((t, idx) => (
+          <div key={idx} className="flex items-center gap-3">
+            <span className="text-xs text-gray-500 w-16 flex-shrink-0">Janela {idx + 1}</span>
+            <input
+              type="time"
+              value={t}
+              onChange={e => setWindowTimes(prev => prev.map((v, i) => i === idx ? e.target.value : v))}
+              className={inputClass + ' flex-1'}
+              onFocus={e => e.target.style.borderColor = PRIMARY}
+              onBlur={e => e.target.style.borderColor = ''}
+            />
+          </div>
+        ))}
       </div>
+      <p className="text-xs text-gray-400">Você pode adicionar mais janelas depois em Configurações.</p>
       <button
         onClick={save}
         disabled={saving || saved}
@@ -308,7 +472,7 @@ function AssistenteStep({ onComplete }: { onComplete: (name: string) => void }) 
   const canSubmit = form.persona_name.trim().length > 0 && !nameIsBia && !saving
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 w-full max-w-sm">
       <div>
         <label className="block text-xs font-medium text-gray-600 mb-1">Nome da assistente</label>
         <input
@@ -365,7 +529,7 @@ type ChatMsg = {
   id: string
   role: 'bia' | 'user'
   content?: string
-  widget?: 'warnings' | 'whatsapp' | 'contacts' | 'digest' | 'assistente'
+  widget?: 'video' | 'acceptance' | 'whatsapp' | 'contacts' | 'digest' | 'assistente'
 }
 
 type QuickReply = { label: string; action: () => void }
@@ -391,15 +555,16 @@ export default function OnboardingView({ userName, initialStep, onComplete }: On
   const mountedRef = useRef(true)
   const conversationId = useRef<string | null>(null)
 
-  // Refs for widget callbacks — prevents stale closures since widgets are rendered
-  // from a frozen messages array that never changes after insertion
-  const onWhatsAppConnectedRef = useRef<() => void>(() => {})
-  const onDigestSavedRef = useRef<() => void>(() => {})
-  const onAssistanteCompleteRef = useRef<(name: string) => void>(() => {})
+  // Refs para callbacks dos widgets — evita stale closures
+  const onAcceptanceConfirmedRef = useRef<() => void>(() => {})
+  const onWhatsAppConnectedRef   = useRef<() => void>(() => {})
+  const onDigestSavedRef         = useRef<() => void>(() => {})
+  const onAssistanteCompleteRef  = useRef<(name: string) => void>(() => {})
 
-  const stableOnWhatsAppConnected = useCallback(() => onWhatsAppConnectedRef.current(), [])
-  const stableOnDigestSaved = useCallback(() => onDigestSavedRef.current(), [])
-  const stableOnAssistanteComplete = useCallback((name: string) => onAssistanteCompleteRef.current(name), [])
+  const stableOnAcceptanceConfirmed = useCallback(() => onAcceptanceConfirmedRef.current(), [])
+  const stableOnWhatsAppConnected   = useCallback(() => onWhatsAppConnectedRef.current(), [])
+  const stableOnDigestSaved         = useCallback(() => onDigestSavedRef.current(), [])
+  const stableOnAssistanteComplete  = useCallback((name: string) => onAssistanteCompleteRef.current(name), [])
 
   useEffect(() => () => { mountedRef.current = false }, [])
 
@@ -430,101 +595,114 @@ export default function OnboardingView({ userName, initialStep, onComplete }: On
         body: JSON.stringify({ step })
       })
       window.dispatchEvent(new CustomEvent('onboardingStepChanged', { detail: step }))
+    } catch { /* non-blocking */ }
+  }
+
+  // ─── Fase 0 — Boas-vindas + Q&A ──────────────────────────────────────────────
+
+  async function initPhase0() {
+    const firstName = userName?.trim().split(/\s+/)[0] || ''
+    await biaSay(
+      `Olá${firstName ? `, ${firstName}` : ''}! Tudo bem? Sou a BIA, assistente do MeuDIA.`,
+      undefined, 600
+    )
+    await biaSay(
+      'Em poucos minutos seu WhatsApp vai estar organizado e gerenciado — você no controle, sem precisar ficar no celular o dia todo.',
+      undefined, 800
+    )
+    await biaSay(
+      'O Luciano gravou uma mensagem rápida pra você antes de começarmos:',
+      undefined, 700
+    )
+    await biaSay(undefined, 'video', 400)
+    await biaSay('Tem alguma dúvida antes de começarmos?', undefined, 700)
+    setPhase(0)
+    setQuickReplies([{ label: 'Pode continuar →', action: goToPhase1 }])
+  }
+
+  async function goToPhase1() {
+    setQuickReplies([])
+    userSay('Pode continuar →')
+    await biaSay('Antes de conectar seu WhatsApp, preciso que você leia alguns pontos importantes sobre como o sistema funciona e como seus dados são protegidos.')
+    await biaSay(undefined, 'acceptance', 400)
+    setPhase(1)
+  }
+
+  // ─── Fase 2 — WhatsApp ────────────────────────────────────────────────────────
+
+  async function handleAcceptanceConfirmed() {
+    try {
+      await advanceStep(1)
+      await biaSay('Obrigado! Agora vamos conectar seu WhatsApp.', undefined, 500)
+      await biaSay('É por aqui que suas mensagens chegam, sua assistente atua e o digest é montado. Sem isso, o MeuDIA não funciona.')
+      await biaSay(undefined, 'whatsapp', 400)
+      setPhase(2)
     } catch {
-      // non-blocking — onboarding continues even if DB update fails
+      await biaSay('Algo deu errado. Recarregue a página e tente novamente.')
     }
   }
 
-  // ─── Phase flow ───────────────────────────────────────────────────────────────
-
-  async function initPhase0() {
-    const firstName = userName ? userName.trim().split(/\s+/)[0] : ''
-    await biaSay(
-      `Olá${firstName ? `, ${firstName}` : ''}! Tudo bem? É a BIA, e agora vou te guiar na configuração do MeuDIA.`,
-      undefined,
-      600
-    )
-    await biaSay(
-      'Nosso objetivo é te auxiliar a organizar sua agenda, minimizando distrações e tarefas que tiram o seu foco e concentração. Antes de iniciarmos, você tem alguma dúvida?',
-      undefined,
-      700
-    )
-    setPhase(0)
-    setQuickReplies([{ label: 'Por ora não →', action: skipToPhase1 }])
-  }
-
-  async function skipToPhase1() {
-    setQuickReplies([])
-    userSay('Por ora não →')
-    await biaSay('Ok! Antes de iniciarmos, leia estes avisos importantes:')
-    await biaSay(undefined, 'warnings', 400)
-    await biaSay('Você confirma que leu e entende como o sistema funciona?', undefined, 600)
-    setPhase(1)
-    setQuickReplies([{ label: 'Li e aceito ✓', action: startPhase2 }])
-  }
-
-  async function startPhase2() {
-    setQuickReplies([])
-    userSay('Li e aceito ✓')
-    await advanceStep(1)
-    await biaSay('Ótimo! Agora vamos conectar seu WhatsApp. É por aqui que suas mensagens chegam e que sua assistente vai atuar.')
-    await biaSay(undefined, 'whatsapp', 400)
-    setPhase(2)
-  }
+  // ─── Fase 3 — Contatos ────────────────────────────────────────────────────────
 
   async function handleWhatsAppConnected() {
     try {
       await advanceStep(2)
-      await biaSay('WhatsApp conectado com sucesso! ✓', undefined, 400)
-      await biaSay('Seus contatos aparecem automaticamente conforme as mensagens chegam. Você pode organizá-los na aba Contatos ou pedir à sua assistente depois.')
-      await biaSay(undefined, 'contacts', 300)
+      await biaSay('WhatsApp conectado! ✓', undefined, 400)
+      await biaSay('Agora, um ponto importante antes de continuar: entender como os contatos funcionam vai fazer diferença no seu dia a dia.')
+      await biaSay(undefined, 'contacts', 400)
       setPhase(3)
       setQuickReplies([{ label: 'Entendido →', action: startPhase4 }])
     } catch {
-      await biaSay('Ops, algo deu errado. Recarregue a página e tente novamente.')
+      await biaSay('Algo deu errado. Recarregue a página e tente novamente.')
     }
   }
+
+  // ─── Fase 4 — Digest ─────────────────────────────────────────────────────────
 
   async function startPhase4() {
     try {
       setQuickReplies([])
       userSay('Entendido →')
       await advanceStep(3)
-      await biaSay('Configure suas janelas de resposta — os momentos do dia em que você abre o WhatsApp. Fora delas, o WhatsApp não existe para você.')
+      await biaSay('Ótimo! Agora configure suas janelas de resposta.', undefined, 500)
+      await biaSay('São os momentos do dia em que você "abre" seu WhatsApp. Fora desses horários, tudo acumula em silêncio — você não é interrompido.')
       await biaSay(undefined, 'digest', 400)
       setPhase(4)
     } catch {
-      await biaSay('Ops, algo deu errado. Recarregue a página e tente novamente.')
+      await biaSay('Algo deu errado. Recarregue a página e tente novamente.')
     }
   }
+
+  // ─── Fase 5 — Assistente ──────────────────────────────────────────────────────
 
   async function handleDigestSaved() {
     try {
       await biaSay('Janelas salvas! ✓', undefined, 400)
-      await biaSay('Última etapa! Vamos configurar sua assistente pessoal.')
-      await biaSay('Eu, BIA, sou a assistente do produto — estou na aba Dúvidas para qualquer coisa sobre o sistema. Sua assistente pessoal terá o nome e a personalidade que você definir.', undefined, 600)
+      await biaSay('Última etapa — vamos configurar sua assistente pessoal.', undefined, 600)
+      await biaSay('Ela é quem vai responder seus contatos pelo WhatsApp, com o nome e o tom que você definir. Eu, BIA, fico aqui no dashboard para qualquer dúvida sobre o produto.', undefined, 700)
       await biaSay(undefined, 'assistente', 400)
       setPhase(5)
     } catch {
-      await biaSay('Ops, algo deu errado. Recarregue a página e tente novamente.')
+      await biaSay('Algo deu errado. Recarregue a página e tente novamente.')
     }
   }
 
   async function handleAssistanteComplete(name: string) {
     try {
-      await biaSay(`Perfeito! ${name} está pronta para trabalhar. Bem-vindo ao MeuDIA!`, undefined, 400)
+      await biaSay(`Tudo pronto! ${name} está configurada e pronta para trabalhar. Bem-vindo ao MeuDIA! 😊`, undefined, 400)
       onComplete(name)
     } catch {
       onComplete(name)
     }
   }
 
-  // Keep refs current on every render
-  onWhatsAppConnectedRef.current = handleWhatsAppConnected
-  onDigestSavedRef.current = handleDigestSaved
-  onAssistanteCompleteRef.current = handleAssistanteComplete
+  // Mantém refs sempre atualizados
+  onAcceptanceConfirmedRef.current = handleAcceptanceConfirmed
+  onWhatsAppConnectedRef.current   = handleWhatsAppConnected
+  onDigestSavedRef.current         = handleDigestSaved
+  onAssistanteCompleteRef.current  = handleAssistanteComplete
 
-  // ─── Phase 0: free Q&A ───────────────────────────────────────────────────────
+  // ─── Q&A livre (fase 0) ───────────────────────────────────────────────────────
 
   async function sendQuestion() {
     const text = input.trim()
@@ -539,7 +717,7 @@ export default function OnboardingView({ userName, initialStep, onComplete }: On
       const res = await fetch('/api/assistente/comando', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
-        body: JSON.stringify({ message: text, conversation_id: conversationId.current, chatSource: 'bia' })
+        body: JSON.stringify({ message: text, conversation_id: conversationId.current })
       })
       const data = await res.json()
       if (data.conversation_id) conversationId.current = data.conversation_id
@@ -550,36 +728,34 @@ export default function OnboardingView({ userName, initialStep, onComplete }: On
     } catch {
       setTyping(false)
       if (!mountedRef.current) return
-      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bia', content: 'Ocorreu um erro ao conectar. Tente novamente.' }])
+      setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'bia', content: 'Ocorreu um erro. Tente novamente.' }])
     } finally {
       setSending(false)
-      setQuickReplies([{ label: 'Por ora não →', action: skipToPhase1 }])
+      setQuickReplies([{ label: 'Pode continuar →', action: goToPhase1 }])
     }
   }
 
   function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendQuestion()
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQuestion() }
   }
 
   // ─── Resume (initialStep > 0) ─────────────────────────────────────────────────
 
   function buildResumedMessages(step: number): { msgs: ChatMsg[]; resumePhase: Phase } {
+    const firstName = userName?.trim().split(/\s+/)[0] || ''
     const msgs: ChatMsg[] = [
-      { id: 'r0', role: 'bia', content: `Bem-vindo de volta${userName ? `, ${userName}` : ''}! Vamos continuar de onde paramos.` }
+      { id: 'r0', role: 'bia', content: `Bem-vindo de volta${firstName ? `, ${firstName}` : ''}! Vamos continuar de onde paramos.` }
     ]
-    if (step === 0) {
+    if (step === 1) {
       msgs.push({ id: 'r1', role: 'bia', content: 'Conecte seu WhatsApp para continuar:', widget: 'whatsapp' })
       return { msgs, resumePhase: 2 }
     }
     msgs.push({ id: 'r2', role: 'bia', content: 'WhatsApp conectado! ✓' })
-    if (step === 1) {
+    if (step === 2) {
       msgs.push({ id: 'r3', role: 'bia', content: 'Sobre seus contatos:', widget: 'contacts' })
       return { msgs, resumePhase: 3 }
     }
-    if (step === 2) {
+    if (step === 3) {
       msgs.push({ id: 'r4', role: 'bia', content: 'Configure suas janelas de resposta:', widget: 'digest' })
       return { msgs, resumePhase: 4 }
     }
@@ -631,23 +807,12 @@ export default function OnboardingView({ userName, initialStep, onComplete }: On
               {msg.content}
             </div>
           )}
-          {msg.widget === 'warnings' && <ReadCard bullets={WARNING_BULLETS} />}
-          {msg.widget === 'whatsapp' && (
-            <div className="w-full max-w-xs">
-              <WhatsAppStep onConnected={stableOnWhatsAppConnected} />
-            </div>
-          )}
-          {msg.widget === 'contacts' && <ContactsStep />}
-          {msg.widget === 'digest' && (
-            <div className="w-full max-w-xs">
-              <DigestStep onSaved={stableOnDigestSaved} />
-            </div>
-          )}
-          {msg.widget === 'assistente' && (
-            <div className="w-full max-w-xs">
-              <AssistenteStep onComplete={stableOnAssistanteComplete} />
-            </div>
-          )}
+          {msg.widget === 'video'      && <VideoWidget url={VIDEO_URL} />}
+          {msg.widget === 'acceptance' && <AcceptanceWidget onAccepted={stableOnAcceptanceConfirmed} />}
+          {msg.widget === 'whatsapp'   && <div className="w-full max-w-sm"><WhatsAppStep onConnected={stableOnWhatsAppConnected} /></div>}
+          {msg.widget === 'contacts'   && <ContactsStep />}
+          {msg.widget === 'digest'     && <div className="w-full max-w-sm"><DigestStep onSaved={stableOnDigestSaved} /></div>}
+          {msg.widget === 'assistente' && <div className="w-full max-w-sm"><AssistenteStep onComplete={stableOnAssistanteComplete} /></div>}
         </div>
       </div>
     )
@@ -658,10 +823,7 @@ export default function OnboardingView({ userName, initialStep, onComplete }: On
 
       {/* Header */}
       <div className="flex items-center gap-3 pb-4 border-b border-gray-200 flex-shrink-0">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-          style={{ background: PRIMARY }}
-        >BI</div>
+        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0" style={{ background: PRIMARY }}>BI</div>
         <div>
           <p className="font-semibold text-gray-800 text-sm">BIA</p>
           <p className="text-xs text-gray-400">Configuração inicial · MeuDIA</p>
@@ -692,7 +854,7 @@ export default function OnboardingView({ userName, initialStep, onComplete }: On
         </div>
       )}
 
-      {/* Text input — only during phase 0 */}
+      {/* Input — só na fase 0 */}
       {phase === 0 && (
         <div className="pt-3 border-t border-gray-200 flex-shrink-0">
           <div className="flex gap-2 items-end">
