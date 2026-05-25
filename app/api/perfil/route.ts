@@ -44,16 +44,28 @@ export async function PATCH(req: NextRequest) {
 
   const { full_name, whatsapp } = await req.json()
 
+  const phone = normalizePhone(whatsapp || '')
+
   const { error } = await supabaseAdmin()
     .from('users')
     .upsert({
       id: user.id,
       email: user.email ?? '',
       full_name,
-      whatsapp: normalizePhone(whatsapp || ''),
+      whatsapp: phone,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'id' })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Sincroniza phone_number nas instâncias ativas que ainda não têm
+  if (phone) {
+    await supabaseAdmin()
+      .from('instances')
+      .update({ phone_number: phone })
+      .eq('user_id', user.id)
+      .is('phone_number', null)
+  }
+
   return NextResponse.json({ ok: true })
 }
