@@ -7,11 +7,12 @@ import Sidebar from '@/components/Sidebar'
 import BottomNav from '@/components/BottomNav'
 import EditarPerfilPage from '@/components/EditarPerfilPage'
 import GerenciarPlanoPage from '@/components/GerenciarPlanoPage'
+import UsoCreditsPage from '@/components/UsoCreditsPage'
 import OnboardingView from '@/components/OnboardingView'
 
 const PRIMARY = '#2A5F6B'
 
-type View = 'main' | 'perfil' | 'plano'
+type View = 'main' | 'perfil' | 'plano' | 'uso'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -119,6 +120,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           onLogout={handleLogout}
           onEditarPerfil={() => setView('perfil')}
           onGerenciarPlano={() => setView('plano')}
+          onUsoCredits={() => setView('uso')}
           onboardingStep={onboardingStep}
           onboardingCompleted={onboardingCompleted}
         />
@@ -140,6 +142,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           />
         ) : view === 'plano' ? (
           <GerenciarPlanoPage onVoltar={() => setView('main')} />
+        ) : view === 'uso' ? (
+          <UsoCreditsPage onVoltar={() => setView('main')} />
         ) : !onboardingCompleted ? (
           <OnboardingView
             userName={userName}

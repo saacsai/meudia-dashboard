@@ -8,6 +8,7 @@ interface Props {
   initials: string
   onEditarPerfil: () => void
   onGerenciarPlano: () => void
+  onUsoCredits: () => void
   onSair: () => void
 }
 
@@ -25,6 +26,15 @@ function IconPlan() {
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="5" width="20" height="14" rx="2"/>
       <line x1="2" y1="10" x2="22" y2="10"/>
+    </svg>
+  )
+}
+
+function IconCredits() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 6v6l4 2"/>
     </svg>
   )
 }
@@ -47,7 +57,7 @@ function IconChevron({ up }: { up: boolean }) {
   )
 }
 
-export default function AvatarMenu({ nomeExibido, email, initials, onEditarPerfil, onGerenciarPlano, onSair }: Props) {
+export default function AvatarMenu({ nomeExibido, email, initials, onEditarPerfil, onGerenciarPlano, onUsoCredits, onSair }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -81,6 +91,13 @@ export default function AvatarMenu({ nomeExibido, email, initials, onEditarPerfi
           >
             <span className="text-gray-400"><IconPlan /></span>
             Gerenciar plano
+          </button>
+          <button
+            onClick={() => { setOpen(false); onUsoCredits() }}
+            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2.5"
+          >
+            <span className="text-gray-400"><IconCredits /></span>
+            Uso e créditos
           </button>
           <div className="border-t border-gray-100 my-1" />
           <button

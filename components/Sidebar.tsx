@@ -37,6 +37,7 @@ interface Props {
   onLogout: () => void
   onEditarPerfil: () => void
   onGerenciarPlano: () => void
+  onUsoCredits: () => void
   onboardingStep?: number
   onboardingCompleted?: boolean
 }
@@ -55,6 +56,7 @@ export default function Sidebar({
   onLogout,
   onEditarPerfil,
   onGerenciarPlano,
+  onUsoCredits,
   onboardingStep = 4,
   onboardingCompleted = true,
 }: Props) {
@@ -130,6 +132,7 @@ export default function Sidebar({
             initials={initials(userName || userEmail)}
             onEditarPerfil={onEditarPerfil}
             onGerenciarPlano={onGerenciarPlano}
+            onUsoCredits={onUsoCredits}
             onSair={onLogout}
           />
         </div>
