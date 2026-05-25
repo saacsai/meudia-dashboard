@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
 
         // Nova assinatura
         if (session.mode === 'subscription' && session.subscription) {
-          const sub = await stripe.subscriptions.retrieve(session.subscription as string)
+          const sub = await stripe.subscriptions.retrieve(session.subscription as string) as Stripe.Subscription
           const priceId = sub.items.data[0].price.id
           const info = PRICE_INFO[priceId]
           if (!info) break
@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
         if (!userId) break
 
         const credits = info.monthly_credits * info.months
-        const sub = invoice.subscription ? await stripe.subscriptions.retrieve(invoice.subscription as string) : null
+        const sub = invoice.subscription ? await stripe.subscriptions.retrieve(invoice.subscription as string) as Stripe.Subscription : null
         const periodEnd = sub ? new Date(sub.current_period_end * 1000).toISOString() : undefined
 
         await Promise.all([
