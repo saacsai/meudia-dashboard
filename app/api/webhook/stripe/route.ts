@@ -113,7 +113,8 @@ export async function POST(req: NextRequest) {
           if (!info) break
 
           const credits = info.monthly_credits * info.months
-          const periodEnd = new Date(sub.current_period_end * 1000).toISOString()
+          const item = sub.items.data[0]
+          const periodEnd = new Date(item.current_period_end * 1000).toISOString()
 
           await Promise.all([
             supabase.from('subscriptions').upsert({
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
               plan: info.plan,
               monthly_credits: info.monthly_credits,
               status: 'active',
-              current_period_start: new Date(sub.current_period_start * 1000).toISOString(),
+              current_period_start: new Date(item.current_period_start * 1000).toISOString(),
               current_period_end: periodEnd,
             }, { onConflict: 'user_id' }),
             addCredits(supabase, userId, credits, `Assinatura ${info.plan} — ${credits} créditos`, periodEnd),
@@ -138,7 +139,8 @@ export async function POST(req: NextRequest) {
         if (invoice.billing_reason === 'subscription_create') break // já tratado no checkout.session.completed
 
         const customerId = invoice.customer as string
-        const priceId = invoice.lines.data[0]?.price?.id
+        const priceField = invoice.lines.data[0]?.pricing?.price_details?.price
+        const priceId = typeof priceField === 'string' ? priceField : priceField?.id
         if (!priceId) break
 
         const info = PRICE_INFO[priceId]
@@ -148,8 +150,10 @@ export async function POST(req: NextRequest) {
         if (!userId) break
 
         const credits = info.monthly_credits * info.months
-        const sub = invoice.subscription ? await stripe.subscriptions.retrieve(invoice.subscription as string) as Stripe.Subscription : null
-        const periodEnd = sub ? new Date(sub.current_period_end * 1000).toISOString() : undefined
+        const subParent = invoice.parent?.subscription_details?.subscription
+        const subId = typeof subParent === 'string' ? subParent : subParent?.id
+        const sub = subId ? await stripe.subscriptions.retrieve(subId) as Stripe.Subscription : null
+        const periodEnd = sub ? new Date(sub.items.data[0].current_period_end * 1000).toISOString() : undefined
 
         await Promise.all([
           supabase.from('subscriptions')
@@ -168,8 +172,9 @@ export async function POST(req: NextRequest) {
       case 'customer.subscription.updated': {
         const sub = event.data.object as Stripe.Subscription
         const status = sub.status === 'active' ? 'active' : sub.status === 'past_due' ? 'past_due' : 'canceled'
+        const periodEnd = sub.items.data[0]?.current_period_end
         await supabase.from('subscriptions')
-          .update({ status, current_period_end: new Date(sub.current_period_end * 1000).toISOString() })
+          .update({ status, ...(periodEnd ? { current_period_end: new Date(periodEnd * 1000).toISOString() } : {}) })
           .eq('stripe_subscription_id', sub.id)
         break
       }
