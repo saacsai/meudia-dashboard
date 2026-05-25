@@ -191,6 +191,17 @@ Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' 
     contactJid: contact_jid,
   }).catch(() => {})
 
+  // Notificação no dashboard para contatos prioritários (fire-and-forget)
+  if (contact?.priority === 'priority') {
+    supabase.from('notifications').insert({
+      instance_id: inst.id,
+      type: 'priority_message',
+      title: contact_name || 'Contato prioritário',
+      body: message.trim().slice(0, 100),
+      read: false,
+    }).then(() => {})
+  }
+
   // Notificação por email
   const emailSettings = scheduleResult.data
   if (emailSettings?.email_notify && process.env.RESEND_API_KEY) {

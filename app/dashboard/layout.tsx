@@ -23,8 +23,34 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [onboardingCompleted, setOnboardingCompleted] = useState(true) // default true evita flash
   const [onboardingStep, setOnboardingStep] = useState(0)
   const [view, setView] = useState<View>('main')
+  const [token, setToken] = useState('')
+  const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => { setView('main') }, [pathname])
+
+  // Poll notificações não lidas a cada 30s
+  useEffect(() => {
+    if (!token) return
+    const fetchUnread = () =>
+      fetch('/api/notificacoes', { headers: { authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) setUnreadCount(d.unread) })
+        .catch(() => {})
+    fetchUnread()
+    const id = setInterval(fetchUnread, 30_000)
+    return () => clearInterval(id)
+  }, [token])
+
+  // Marca todas como lidas ao entrar em /dashboard/contatos
+  useEffect(() => {
+    if (!token || pathname !== '/dashboard/contatos' || unreadCount === 0) return
+    fetch('/api/notificacoes', {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${token}` },
+    })
+      .then(() => setUnreadCount(0))
+      .catch(() => {})
+  }, [pathname, token, unreadCount])
 
   useEffect(() => {
     const supabase = getSupabase()
@@ -33,6 +59,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         window.location.href = '/login'
         return
       }
+      setToken(session.access_token)
       setUserEmail(session.user.email || '')
       setUserName(
         session.user.user_metadata?.full_name ||
@@ -123,6 +150,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           onUsoCredits={() => setView('uso')}
           onboardingStep={onboardingStep}
           onboardingCompleted={onboardingCompleted}
+          unreadCount={unreadCount}
         />
       </div>
 

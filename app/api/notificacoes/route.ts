@@ -41,3 +41,28 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ unread, items: data || [] })
 }
+
+export async function PATCH(req: NextRequest) {
+  const user = await getAuthUser(req)
+  if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  const supabase = db()
+
+  const { data: instances } = await supabase
+    .from('instances')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('active', true)
+    .limit(1)
+
+  const inst = instances?.[0] ?? null
+  if (!inst) return NextResponse.json({ ok: true })
+
+  await supabase
+    .from('notifications')
+    .update({ read: true })
+    .eq('instance_id', inst.id)
+    .eq('read', false)
+
+  return NextResponse.json({ ok: true })
+}

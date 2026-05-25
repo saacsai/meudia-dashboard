@@ -40,6 +40,7 @@ interface Props {
   onUsoCredits: () => void
   onboardingStep?: number
   onboardingCompleted?: boolean
+  unreadCount?: number
 }
 
 function initials(nome: string) {
@@ -59,6 +60,7 @@ export default function Sidebar({
   onUsoCredits,
   onboardingStep = 4,
   onboardingCompleted = true,
+  unreadCount = 0,
 }: Props) {
   const pathname = usePathname()
 
@@ -113,6 +115,14 @@ export default function Sidebar({
             >
               <span className="text-base leading-none">{item.icon}</span>
               <span className="flex-1">{item.label}</span>
+              {item.href === '/dashboard/contatos' && unreadCount > 0 && (
+                <span
+                  className="text-white text-[10px] font-bold rounded-full flex items-center justify-center"
+                  style={{ backgroundColor: '#ef4444', minWidth: '18px', height: '18px', padding: '0 5px' }}
+                >
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
               {done && (
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ color: primaryColor }}>
                   <polyline points="1.5 6 4.5 9 10.5 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
