@@ -41,6 +41,7 @@ function IconCredit() {
 
 export default function UsoCreditsPage({ onVoltar }: Props) {
   const [balance, setBalance] = useState<number | null>(null)
+  const [monthlyCredits, setMonthlyCredits] = useState<number | null>(null)
   const [resetAt, setResetAt] = useState<string | null>(null)
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [usageByDay, setUsageByDay] = useState<UsageDay[]>([])
@@ -54,11 +55,17 @@ export default function UsoCreditsPage({ onVoltar }: Props) {
 
       const userId = session.user.id
 
-      const [balanceRes, txRes, usageRes] = await Promise.all([
+      const [balanceRes, subRes, txRes, usageRes] = await Promise.all([
         supabase
           .from('credit_balance')
           .select('balance, reset_at')
           .eq('user_id', userId)
+          .single(),
+        supabase
+          .from('subscriptions')
+          .select('monthly_credits')
+          .eq('user_id', userId)
+          .eq('status', 'active')
           .single(),
         supabase
           .from('credit_transactions')
@@ -78,6 +85,8 @@ export default function UsoCreditsPage({ onVoltar }: Props) {
         setBalance(balanceRes.data.balance)
         setResetAt(balanceRes.data.reset_at)
       }
+
+      if (subRes.data) setMonthlyCredits(subRes.data.monthly_credits)
 
       if (txRes.data) setTransactions(txRes.data)
 
@@ -138,21 +147,43 @@ export default function UsoCreditsPage({ onVoltar }: Props) {
       </div>
 
       {/* Saldo atual */}
-      <div className="rounded-2xl p-5 mb-5 text-white" style={{ background: `linear-gradient(135deg, ${PRIMARY}, #3d8a9a)` }}>
-        <div className="flex items-center gap-2 mb-1 opacity-80">
-          <IconCredit />
-          <span className="text-sm font-medium">Saldo disponível</span>
-        </div>
-        <div className="text-4xl font-bold tracking-tight">
-          {balance?.toLocaleString('pt-BR') ?? '—'}
-        </div>
-        <div className="text-sm opacity-70 mt-1">créditos</div>
-        {resetAt && (
-          <div className="text-xs opacity-60 mt-3">
-            Renova em {new Date(resetAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}
+      {(() => {
+        const pct = (balance !== null && monthlyCredits) ? Math.min(100, Math.round((balance / monthlyCredits) * 100)) : null
+        return (
+          <div className="rounded-2xl p-5 mb-5 text-white" style={{ background: `linear-gradient(135deg, ${PRIMARY}, #3d8a9a)` }}>
+            <div className="flex items-center gap-2 mb-1 opacity-80">
+              <IconCredit />
+              <span className="text-sm font-medium">Saldo disponível</span>
+            </div>
+            <div className="flex items-end gap-3">
+              <div className="text-4xl font-bold tracking-tight">
+                {balance?.toLocaleString('pt-BR') ?? '—'}
+              </div>
+              {pct !== null && (
+                <div className="mb-1 text-lg font-semibold opacity-80">{pct}%</div>
+              )}
+            </div>
+            <div className="text-sm opacity-70 mt-0.5">
+              créditos{monthlyCredits ? ` de ${monthlyCredits.toLocaleString('pt-BR')}` : ''}
+            </div>
+            {pct !== null && (
+              <div className="mt-3">
+                <div className="h-1.5 rounded-full bg-white/20 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-white/70 transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {resetAt && (
+              <div className="text-xs opacity-60 mt-2">
+                Renova em {new Date(resetAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        )
+      })()}
 
       {/* Gráfico de uso — 7 dias */}
       <div className="bg-white rounded-2xl p-5 mb-5 border border-gray-100">
