@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { callGemini, loadMemoryBlock } from '@/lib/assistant-tools'
+import { callGemini, loadMemoryBlock, hasCredits, debitCredits } from '@/lib/assistant-tools'
 import type { GeminiContent } from '@/lib/assistant-tools'
 import { sendMessageAlert } from '@/lib/email'
 
@@ -46,6 +46,11 @@ export async function POST(req: NextRequest) {
 
   // Agente pausado — Olivia não responde
   if (inst.paused) return NextResponse.json({ response: null, paused: true })
+
+  // Saldo de créditos insuficiente
+  if (!(await hasCredits(inst.user_id, supabase))) {
+    return NextResponse.json({ response: null, no_credits: true })
+  }
 
   const { data: profile } = await supabase
     .from('users')
@@ -136,12 +141,23 @@ Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' 
     { role: 'user', parts: [{ text: message.trim() }] }
   ]
 
-  const { text, toolsUsed } = await callGemini(contents, system, inst.id, supabase)
+  const { text, toolsUsed, tokensIn, tokensOut } = await callGemini(contents, system, inst.id, supabase)
 
   await supabase.from('assistant_messages').insert([
     { instance_id: inst.id, role: 'user', content: message.trim(), chat_source: 'whatsapp' },
     { instance_id: inst.id, role: 'assistant', content: text, tool_calls: toolsUsed.length ? toolsUsed : null, chat_source: 'whatsapp' }
   ])
+
+  // Débito de créditos (fire-and-forget)
+  debitCredits({
+    userId: inst.user_id,
+    instanceId: inst.id,
+    tokensIn,
+    tokensOut,
+    messageType: 'whatsapp_olivia',
+    supabase,
+    contactJid: contact_jid,
+  }).catch(() => {})
 
   // Notificação por email
   const emailSettings = scheduleResult.data

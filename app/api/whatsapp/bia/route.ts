@@ -1,4 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+import { hasCredits, debitCredits } from '@/lib/assistant-tools'
+
+function db() {
+  const key = process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, key)
+}
 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`
 
@@ -69,9 +76,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
 
-  const { message } = await req.json()
+  const { message, instance_name } = await req.json()
   if (!message?.trim()) {
     return NextResponse.json({ error: 'message é obrigatório' }, { status: 400 })
+  }
+
+  // Lookup instance para controle de créditos (opcional — não bloqueia se ausente)
+  let instCtx: { id: string; user_id: string } | null = null
+  if (instance_name) {
+    const supabase = db()
+    const { data } = await supabase
+      .from('instances')
+      .select('id, user_id')
+      .eq('instance_name', instance_name)
+      .eq('active', true)
+      .limit(1)
+    instCtx = data?.[0] ?? null
+
+    if (instCtx && !(await hasCredits(instCtx.user_id, supabase))) {
+      return NextResponse.json({ response: null, no_credits: true })
+    }
   }
 
   const res = await fetch(`${GEMINI_URL}?key=${process.env.GEMINI_API_KEY}`, {
@@ -91,6 +115,19 @@ export async function POST(req: NextRequest) {
   }
 
   const text: string = json.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Não consegui processar. Tente novamente.'
+
+  if (instCtx) {
+    const tokensIn: number = json.usageMetadata?.promptTokenCount ?? 0
+    const tokensOut: number = json.usageMetadata?.candidatesTokenCount ?? 0
+    debitCredits({
+      userId: instCtx.user_id,
+      instanceId: instCtx.id,
+      tokensIn,
+      tokensOut,
+      messageType: 'whatsapp_bia',
+      supabase: db(),
+    }).catch(() => {})
+  }
 
   return NextResponse.json({ response: text })
 }

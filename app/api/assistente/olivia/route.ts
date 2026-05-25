@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { callGemini, loadMemoryBlock } from '@/lib/assistant-tools'
+import { callGemini, loadMemoryBlock, hasCredits, debitCredits } from '@/lib/assistant-tools'
 import type { GeminiContent } from '@/lib/assistant-tools'
 
 async function getAuthUser(req: NextRequest) {
@@ -46,6 +46,10 @@ export async function POST(req: NextRequest) {
 
   const inst = instances?.[0] ?? null
   if (!inst) return NextResponse.json({ error: 'Nenhuma instância ativa' }, { status: 404 })
+
+  if (!(await hasCredits(user.id, supabase))) {
+    return NextResponse.json({ error: 'Créditos insuficientes', code: 'INSUFFICIENT_CREDITS' }, { status: 402 })
+  }
 
   const { data: profile } = await supabase
     .from('users')
@@ -118,7 +122,9 @@ Data/hora: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' 
     { role: 'user', parts: [{ text: message.trim() }] }
   ]
 
-  const { text, toolsUsed } = await callGemini(contents, system, inst.id, supabase)
+  const { text, toolsUsed, tokensIn, tokensOut } = await callGemini(contents, system, inst.id, supabase)
+
+  debitCredits({ userId: user.id, instanceId: inst.id, tokensIn, tokensOut, messageType: 'dashboard_olivia', supabase }).catch(() => {})
 
   let conversationId = convId ?? null
   if (!conversationId) {

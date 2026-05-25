@@ -478,6 +478,57 @@ export async function executeTool(
   return { erro: `Ferramenta desconhecida: ${name}` }
 }
 
+// ─── Credit helpers ───────────────────────────────────────────────────────────
+
+export async function hasCredits(userId: string, supabase: SupabaseClient): Promise<boolean> {
+  const { data } = await supabase
+    .from('credit_balance')
+    .select('balance')
+    .eq('user_id', userId)
+    .single()
+  return (data?.balance ?? 0) > 0
+}
+
+export async function debitCredits({
+  userId,
+  instanceId,
+  tokensIn,
+  tokensOut,
+  messageType,
+  supabase,
+  contactJid,
+}: {
+  userId: string
+  instanceId: string
+  tokensIn: number
+  tokensOut: number
+  messageType: string
+  supabase: SupabaseClient
+  contactJid?: string
+}): Promise<void> {
+  const credits = Math.max(1, Math.ceil((tokensIn + tokensOut) / 1000))
+
+  await Promise.all([
+    supabase.rpc('debit_credits', { p_user_id: userId, p_credits: credits }),
+    supabase.from('usage_log').insert({
+      user_id: userId,
+      instance_id: instanceId,
+      contact_remote_jid: contactJid ?? null,
+      message_type: messageType,
+      tokens_input: tokensIn,
+      tokens_output: tokensOut,
+      gemini_model: 'gemini-2.5-flash',
+      credits_debited: credits,
+    }),
+    supabase.from('credit_transactions').insert({
+      user_id: userId,
+      type: 'usage',
+      amount: -credits,
+      description: messageType,
+    }),
+  ])
+}
+
 // ─── Gemini multi-turn ────────────────────────────────────────────────────────
 
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`
@@ -488,7 +539,7 @@ export async function callGemini(
   instanceId: string,
   supabase: SupabaseClient,
   depth = 0
-): Promise<{ text: string; toolsUsed: ToolUsed[] }> {
+): Promise<{ text: string; toolsUsed: ToolUsed[]; tokensIn: number; tokensOut: number }> {
   const toolsUsed: ToolUsed[] = []
 
   const res = await fetch(`${GEMINI_URL}?key=${process.env.GEMINI_API_KEY}`, {
@@ -503,9 +554,12 @@ export async function callGemini(
   })
 
   const json = await res.json()
+  const tokensIn: number = json.usageMetadata?.promptTokenCount ?? 0
+  const tokensOut: number = json.usageMetadata?.candidatesTokenCount ?? 0
+
   if (!res.ok) {
     console.error('Gemini error', res.status, JSON.stringify(json).slice(0, 200))
-    return { text: 'Não consegui processar. Tente novamente.', toolsUsed }
+    return { text: 'Não consegui processar. Tente novamente.', toolsUsed, tokensIn: 0, tokensOut: 0 }
   }
 
   const parts: GeminiPart[] = json.candidates?.[0]?.content?.parts ?? []
@@ -514,13 +568,12 @@ export async function callGemini(
   )
 
   if (fnCalls.length > 0 && depth < 12) {
-    // Execute all function calls from this turn in parallel
     const results = await Promise.all(
       fnCalls.map(fc => executeTool(fc.functionCall.name, fc.functionCall.args, instanceId, supabase))
     )
     fnCalls.forEach((fc, i) => {
       toolsUsed.push({ tool: fc.functionCall.name, args: fc.functionCall.args })
-      void results[i] // already executed above
+      void results[i]
     })
 
     const next = await callGemini(
@@ -531,9 +584,14 @@ export async function callGemini(
       ],
       system, instanceId, supabase, depth + 1
     )
-    return { text: next.text, toolsUsed: [...toolsUsed, ...next.toolsUsed] }
+    return {
+      text: next.text,
+      toolsUsed: [...toolsUsed, ...next.toolsUsed],
+      tokensIn: tokensIn + next.tokensIn,
+      tokensOut: tokensOut + next.tokensOut,
+    }
   }
 
   const textPart = parts.find((p): p is { text: string } => 'text' in p)
-  return { text: textPart?.text ?? 'Feito.', toolsUsed }
+  return { text: textPart?.text ?? 'Feito.', toolsUsed, tokensIn, tokensOut }
 }
