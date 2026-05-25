@@ -500,6 +500,73 @@ function MemoriasSection() {
   )
 }
 
+// ─── Segundo Número Section ───────────────────────────────────────────────────
+
+function SegundoNumeroSection() {
+  const [instanceId, setInstanceId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [phone, setPhone] = useState('')
+
+  useEffect(() => {
+    async function load() {
+      const supabase = getSupabase()
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const { data } = await supabase
+        .from('instances')
+        .select('id, personal_channel')
+        .eq('user_id', session.user.id)
+        .eq('active', true)
+        .single()
+      if (data) {
+        setInstanceId(data.id)
+        setPhone(data.personal_channel || '')
+      }
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    if (!instanceId) return
+    setSaving(true)
+    const supabase = getSupabase()
+    const digits = phone.replace(/\D/g, '')
+    await supabase.from('instances').update({ personal_channel: digits || null }).eq('id', instanceId)
+    setSaving(false); setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
+
+  if (loading) return <p className="text-sm text-gray-400">Carregando…</p>
+
+  return (
+    <form onSubmit={handleSave} className="space-y-3">
+      <p className="text-xs text-gray-500">
+        Se você tem um segundo número, o resumo de mensagens será enviado para ele via WhatsApp.
+        Ideal ter apenas um contato neste número: o seu número principal (onde a Olivia responde).
+      </p>
+      <div>
+        <label className="block text-xs font-medium text-gray-600 mb-1">Número (com DDD e código do país)</label>
+        <input
+          type="tel"
+          value={phone}
+          onChange={e => setPhone(e.target.value)}
+          placeholder="5511999990000"
+          className={inputClass}
+          onFocus={e => e.target.style.borderColor = PRIMARY}
+          onBlur={e => e.target.style.borderColor = ''}
+        />
+      </div>
+      <button type="submit" disabled={saving} className="w-full text-white text-sm font-medium rounded-xl py-2.5 disabled:opacity-50" style={{ backgroundColor: saved ? '#16a34a' : PRIMARY }}>
+        {saving ? 'Salvando…' : saved ? '✓ Salvo' : 'Salvar número'}
+      </button>
+    </form>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
@@ -569,6 +636,9 @@ export default function ConfiguracoesPage() {
       </Section>
       <Section title="Horários do Resumo">
         <DigestSection />
+      </Section>
+      <Section title="Segundo número" subtitle="Receba o resumo de mensagens no seu número pessoal via WhatsApp.">
+        <SegundoNumeroSection />
       </Section>
       <Section title="Memórias" subtitle="O que a assistente lembra entre conversas. Você pode apagar qualquer item.">
         <MemoriasSection />

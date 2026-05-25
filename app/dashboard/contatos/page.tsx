@@ -34,14 +34,12 @@ const PRIORITY_LABEL: Record<string, string> = {
   priority: 'Prioridade',
   normal: 'Normal',
   muted: 'Silenciado',
-  second_number: 'Segundo número',
 }
 
 const PRIORITY_COLOR: Record<string, string> = {
   priority: '#2A5F6B',
   normal: '#6b7280',
   muted: '#d1d5db',
-  second_number: '#d97706',
 }
 
 async function getToken() {
@@ -63,7 +61,7 @@ export default function ContatosPage() {
   const [groups, setGroups] = useState<ContactGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | 'priority' | 'normal' | 'muted' | 'second_number'>('all')
+  const [filter, setFilter] = useState<'all' | 'priority' | 'normal' | 'muted'>('all')
   const [filterGroup, setFilterGroup] = useState('')
   const [saving, setSaving] = useState<string | null>(null)
   const [editingName, setEditingName] = useState<string | null>(null)
@@ -320,7 +318,6 @@ export default function ContatosPage() {
     priority: contacts.filter(c => c.priority === 'priority').length,
     normal: contacts.filter(c => c.priority === 'normal').length,
     muted: contacts.filter(c => c.priority === 'muted').length,
-    second_number: contacts.filter(c => c.priority === 'second_number').length,
   }
 
   if (loading) return <div className="text-sm text-gray-400">Carregando…</div>
@@ -521,7 +518,6 @@ export default function ContatosPage() {
             <option value="priority">Prioridade</option>
             <option value="normal">Normal</option>
             <option value="muted">Silenciado</option>
-            <option value="second_number">Segundo número</option>
           </select>
           <button
             onClick={applyBulk}
@@ -568,7 +564,7 @@ export default function ContatosPage() {
 
       {/* Filtros de prioridade + grupo */}
       <div className="flex gap-2 flex-wrap items-center">
-        {(['all', 'priority', 'normal', 'muted', 'second_number'] as const).map(f => (
+        {(['all', 'priority', 'normal', 'muted'] as const).map(f => (
           <button
             key={f}
             onClick={() => setFilter(f)}
@@ -730,7 +726,6 @@ export default function ContatosPage() {
                   <option value="priority">Prioridade</option>
                   <option value="normal">Normal</option>
                   <option value="muted">Silenciado</option>
-                  <option value="second_number">Segundo número</option>
                 </select>
               </div>
             )
