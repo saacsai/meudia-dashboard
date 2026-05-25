@@ -10,17 +10,28 @@ interface Props {
 }
 
 const CICLOS: Record<string, Array<{ id: string; label: string; valor: string; valorTotal: string; equivalente: string; creditos: string; detalhe: string }>> = {
-  starter: [
-    { id: 'starter_mensal',     label: 'Mensal',     valor: 'R$ 97/mês',    valorTotal: 'R$ 97,00',    equivalente: 'R$ 97/mês',  creditos: '500 créditos/mês',   detalhe: 'Cancele quando quiser' },
-    { id: 'starter_trimestral', label: 'Trimestral', valor: 'R$ 237/trim',  valorTotal: 'R$ 237,00',   equivalente: 'R$ 79/mês',  creditos: '500 créditos/mês',   detalhe: 'Cobrado a cada 3 meses' },
-    { id: 'starter_anual',      label: 'Anual',      valor: 'R$ 897/ano',   valorTotal: 'R$ 897,00',   equivalente: 'R$ 75/mês',  creditos: '500 créditos/mês',   detalhe: 'Cobrado uma vez por ano' },
+  essencial: [
+    { id: 'essencial_mensal',      label: 'Mensal',      valor: 'R$ 97/mês',     valorTotal: 'R$ 97,00',     equivalente: 'R$ 97/mês',   creditos: '3.000 créditos/mês',  detalhe: 'Cancele quando quiser' },
+    { id: 'essencial_trimestral',  label: 'Trimestral',  valor: 'R$ 247/trim',   valorTotal: 'R$ 247,00',    equivalente: 'R$ 82/mês',   creditos: '3.000 créditos/mês',  detalhe: 'Cobrado a cada 3 meses' },
+    { id: 'essencial_anual',       label: 'Anual',       valor: 'R$ 870/ano',    valorTotal: 'R$ 870,00',    equivalente: 'R$ 72/mês',   creditos: '3.000 créditos/mês',  detalhe: 'Cobrado uma vez por ano' },
   ],
-  pro: [
-    { id: 'pro_mensal',         label: 'Mensal',     valor: 'R$ 197/mês',   valorTotal: 'R$ 197,00',   equivalente: 'R$ 197/mês', creditos: '2.000 créditos/mês', detalhe: 'Cancele quando quiser' },
-    { id: 'pro_trimestral',     label: 'Trimestral', valor: 'R$ 497/trim',  valorTotal: 'R$ 497,00',   equivalente: 'R$ 166/mês', creditos: '2.000 créditos/mês', detalhe: 'Cobrado a cada 3 meses' },
-    { id: 'pro_anual',          label: 'Anual',      valor: 'R$ 1.897/ano', valorTotal: 'R$ 1.897,00', equivalente: 'R$ 158/mês', creditos: '2.000 créditos/mês', detalhe: 'Cobrado uma vez por ano' },
+  profissional: [
+    { id: 'profissional_mensal',   label: 'Mensal',      valor: 'R$ 197/mês',    valorTotal: 'R$ 197,00',    equivalente: 'R$ 197/mês',  creditos: '8.000 créditos/mês',  detalhe: 'Cancele quando quiser' },
+    { id: 'profissional_trimestral', label: 'Trimestral', valor: 'R$ 497/trim',  valorTotal: 'R$ 497,00',    equivalente: 'R$ 166/mês',  creditos: '8.000 créditos/mês',  detalhe: 'Cobrado a cada 3 meses' },
+    { id: 'profissional_anual',    label: 'Anual',       valor: 'R$ 1.770/ano',  valorTotal: 'R$ 1.770,00',  equivalente: 'R$ 148/mês',  creditos: '8.000 créditos/mês',  detalhe: 'Cobrado uma vez por ano' },
+  ],
+  executivo: [
+    { id: 'executivo_mensal',      label: 'Mensal',      valor: 'R$ 397/mês',    valorTotal: 'R$ 397,00',    equivalente: 'R$ 397/mês',  creditos: '20.000 créditos/mês', detalhe: 'Cancele quando quiser' },
+    { id: 'executivo_trimestral',  label: 'Trimestral',  valor: 'R$ 997/trim',   valorTotal: 'R$ 997,00',    equivalente: 'R$ 332/mês',  creditos: '20.000 créditos/mês', detalhe: 'Cobrado a cada 3 meses' },
+    { id: 'executivo_anual',       label: 'Anual',       valor: 'R$ 3.570/ano',  valorTotal: 'R$ 3.570,00',  equivalente: 'R$ 298/mês',  creditos: '20.000 créditos/mês', detalhe: 'Cobrado uma vez por ano' },
   ],
 }
+
+const AVULSO = [
+  { id: 'avulso_1000', creditos: '1.000 créditos', valor: 'R$ 47,00',  detalhe: 'R$ 47 por 1.000 créditos' },
+  { id: 'avulso_3000', creditos: '3.000 créditos', valor: 'R$ 127,00', detalhe: 'R$ 42 por 1.000 créditos' },
+  { id: 'avulso_5000', creditos: '5.000 créditos', valor: 'R$ 197,00', detalhe: 'R$ 39 por 1.000 créditos' },
+]
 
 const INCLUSOS = [
   'Assistente IA com nome e personalidade customizáveis',
@@ -29,8 +40,8 @@ const INCLUSOS = [
   'PAUSE MODE para silenciar respostas',
 ]
 
-type Plano = 'starter' | 'pro'
-type Etapa = 'plano' | 'ciclo' | 'confirmar'
+type Plano = 'essencial' | 'profissional' | 'executivo'
+type Etapa = 'plano' | 'ciclo' | 'confirmar' | 'avulso'
 
 function IconBack() {
   return (
@@ -80,8 +91,9 @@ export default function GerenciarPlanoPage({ onVoltar }: Props) {
   const [planoAtivo, setPlanoAtivo] = useState<string>('gratuito')
   const [accessToken, setAccessToken] = useState('')
   const [etapa, setEtapa] = useState<Etapa>('plano')
-  const [planoSelecionado, setPlanoSelecionado] = useState<Plano>('starter')
-  const [cicloSelecionado, setCicloSelecionado] = useState('starter_mensal')
+  const [planoSelecionado, setPlanoSelecionado] = useState<Plano>('essencial')
+  const [cicloSelecionado, setCicloSelecionado] = useState('essencial_mensal')
+  const [avulsoSelecionado, setAvulsoSelecionado] = useState('avulso_3000')
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -102,7 +114,7 @@ export default function GerenciarPlanoPage({ onVoltar }: Props) {
     load()
   }, [])
 
-  const isPago = ['starter', 'pro', 'business'].includes(planoAtivo)
+  const isPago = ['essencial', 'profissional', 'executivo'].includes(planoAtivo)
   const cicloAtual = CICLOS[planoSelecionado].find(c => c.id === cicloSelecionado)!
 
   async function handleUpgrade() {
@@ -125,6 +137,26 @@ export default function GerenciarPlanoPage({ onVoltar }: Props) {
     }
   }
 
+  async function handleAvulso() {
+    setLoading(true)
+    setErro('')
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plano: avulsoSelecionado }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setErro(json.error || `Erro ${res.status}`); return }
+      if (json.url) window.location.href = json.url
+      else setErro(json.error || 'URL não retornada.')
+    } catch (e) {
+      setErro(String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   function selecionarPlano(id: Plano) {
     setPlanoSelecionado(id)
     setCicloSelecionado(`${id}_mensal`)
@@ -134,13 +166,21 @@ export default function GerenciarPlanoPage({ onVoltar }: Props) {
   function voltarEtapa() {
     if (etapa === 'confirmar') { setEtapa('ciclo'); return }
     if (etapa === 'ciclo') { setEtapa('plano'); return }
+    if (etapa === 'avulso') { setEtapa('plano'); return }
     onVoltar()
+  }
+
+  const nomeExibicao: Record<Plano, string> = {
+    essencial: 'Essencial',
+    profissional: 'Profissional',
+    executivo: 'Executivo',
   }
 
   const tituloHeader: Record<Etapa, string> = {
     plano: 'Planos',
-    ciclo: `${planoSelecionado === 'starter' ? 'Starter' : 'Pro'} — escolha o ciclo`,
+    ciclo: `${nomeExibicao[planoSelecionado]} — escolha o ciclo`,
     confirmar: 'Confirmar assinatura',
+    avulso: 'Comprar créditos avulsos',
   }
 
   return (
@@ -181,59 +221,96 @@ export default function GerenciarPlanoPage({ onVoltar }: Props) {
             {!isPago && (
               <div className="px-5 py-4 rounded-xl border-2 border-green-400 bg-green-50 relative">
                 <span className="absolute top-3 right-3 text-[10px] font-semibold bg-green-500 text-white px-2 py-0.5 rounded-full">✓ seu plano atual</span>
-                <div className="font-semibold text-gray-900">Plano Gratuito</div>
-                <div className="text-sm text-gray-500 mt-0.5">Teste limitado — sem assinatura</div>
+                <div className="font-semibold text-gray-900">Plano Trial</div>
+                <div className="text-sm text-gray-500 mt-0.5">1.000 créditos de teste — sem assinatura</div>
               </div>
             )}
 
-            <button
-              onClick={() => planoAtivo !== 'starter' && selecionarPlano('starter')}
-              disabled={planoAtivo === 'starter'}
-              className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-colors relative ${
-                planoAtivo === 'starter'
-                  ? 'border-green-400 bg-green-50 cursor-default'
-                  : 'border-gray-200 hover:border-[--primary] hover:bg-[--primary]/5 cursor-pointer'
-              }`}
-              style={{ '--primary': PRIMARY } as React.CSSProperties}
-            >
-              {planoAtivo === 'starter' && (
-                <span className="absolute top-3 right-3 text-[10px] font-semibold bg-green-500 text-white px-2 py-0.5 rounded-full">✓ ativo</span>
-              )}
-              <div className="font-semibold text-gray-900">Starter</div>
-              <div className="text-sm text-gray-500 mt-0.5">500 créditos/mês · 1 instância</div>
-              {!isPago && <div className="text-xs mt-2" style={{ color: PRIMARY }}>Ver opções de pagamento →</div>}
-            </button>
-
-            <button
-              onClick={() => planoAtivo !== 'pro' && selecionarPlano('pro')}
-              disabled={planoAtivo === 'pro'}
-              className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-colors relative ${
-                planoAtivo === 'pro'
-                  ? 'border-green-400 bg-green-50 cursor-default'
-                  : 'border-gray-200 hover:border-[--primary] hover:bg-[--primary]/5 cursor-pointer'
-              }`}
-              style={{ '--primary': PRIMARY } as React.CSSProperties}
-            >
-              {planoAtivo === 'pro' && (
-                <span className="absolute top-3 right-3 text-[10px] font-semibold bg-green-500 text-white px-2 py-0.5 rounded-full">✓ ativo</span>
-              )}
-              {!isPago && (
-                <span className="absolute top-3 right-3 text-[10px] font-semibold text-white px-2 py-0.5 rounded-full" style={{ backgroundColor: PRIMARY }}>mais popular</span>
-              )}
-              <div className="font-semibold text-gray-900">Pro</div>
-              <div className="text-sm text-gray-500 mt-0.5">2.000 créditos/mês · instâncias ilimitadas</div>
-              {!isPago && <div className="text-xs mt-2" style={{ color: PRIMARY }}>Ver opções de pagamento →</div>}
-            </button>
-
-            <div className="px-5 py-4 rounded-xl border-2 border-dashed border-gray-200">
-              <div className="font-semibold text-gray-900">Business</div>
-              <div className="text-sm text-gray-500 mt-0.5">10.000+ créditos/mês · suporte dedicado</div>
-              <a href="mailto:contato@saacs.com.br" className="text-xs mt-2 inline-block hover:underline" style={{ color: PRIMARY }}>
-                Fale com a equipe →
-              </a>
-            </div>
+            {(['essencial', 'profissional', 'executivo'] as Plano[]).map(plano => {
+              const credMap: Record<Plano, string> = {
+                essencial: '3.000 créditos/mês · a partir de R$ 97/mês',
+                profissional: '8.000 créditos/mês · a partir de R$ 197/mês',
+                executivo: '20.000 créditos/mês · a partir de R$ 397/mês',
+              }
+              const isAtivo = planoAtivo === plano
+              return (
+                <button
+                  key={plano}
+                  onClick={() => !isAtivo && selecionarPlano(plano)}
+                  disabled={isAtivo}
+                  className={`w-full text-left px-5 py-4 rounded-xl border-2 transition-colors relative ${
+                    isAtivo
+                      ? 'border-green-400 bg-green-50 cursor-default'
+                      : 'border-gray-200 cursor-pointer'
+                  }`}
+                  style={!isAtivo ? { '--primary': PRIMARY } as React.CSSProperties : undefined}
+                >
+                  {isAtivo && (
+                    <span className="absolute top-3 right-3 text-[10px] font-semibold bg-green-500 text-white px-2 py-0.5 rounded-full">✓ ativo</span>
+                  )}
+                  {!isPago && plano === 'profissional' && (
+                    <span className="absolute top-3 right-3 text-[10px] font-semibold text-white px-2 py-0.5 rounded-full" style={{ backgroundColor: PRIMARY }}>mais popular</span>
+                  )}
+                  <div className="font-semibold text-gray-900">{nomeExibicao[plano]}</div>
+                  <div className="text-sm text-gray-500 mt-0.5">{credMap[plano]}</div>
+                  {!isAtivo && <div className="text-xs mt-2" style={{ color: PRIMARY }}>Ver opções de pagamento →</div>}
+                </button>
+              )
+            })}
           </div>
         </>
+      )}
+
+      {/* Link para créditos avulsos */}
+      {etapa === 'plano' && (
+        <div className="mt-5 pt-4 border-t border-gray-100 text-center">
+          <button
+            onClick={() => setEtapa('avulso')}
+            className="text-sm hover:underline"
+            style={{ color: PRIMARY }}
+          >
+            Precisa de mais créditos? Comprar créditos avulsos →
+          </button>
+        </div>
+      )}
+
+      {/* ETAPA AVULSO — Créditos avulsos */}
+      {etapa === 'avulso' && (
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            Créditos avulsos não expiram e são somados ao seu saldo atual.
+          </p>
+          {AVULSO.map(op => (
+            <button
+              key={op.id}
+              onClick={() => setAvulsoSelecionado(op.id)}
+              className="w-full text-left px-5 py-4 rounded-xl border-2 transition-colors"
+              style={{
+                borderColor: avulsoSelecionado === op.id ? PRIMARY : '#e5e7eb',
+                backgroundColor: avulsoSelecionado === op.id ? `${PRIMARY}0d` : 'transparent',
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-gray-900 text-sm">{op.creditos}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{op.detalhe}</div>
+                </div>
+                <div className="text-base font-bold text-gray-900">{op.valor}</div>
+              </div>
+            </button>
+          ))}
+
+          {erro && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{erro}</p>}
+
+          <button
+            onClick={handleAvulso}
+            disabled={loading}
+            className="w-full text-center text-sm font-medium text-white rounded-xl py-3 disabled:opacity-50 transition-colors"
+            style={{ backgroundColor: PRIMARY }}
+          >
+            {loading ? 'Aguarde…' : 'Comprar agora →'}
+          </button>
+        </div>
       )}
 
       {/* ETAPA 2 — Escolher ciclo */}
@@ -279,7 +356,7 @@ export default function GerenciarPlanoPage({ onVoltar }: Props) {
           <div className="border border-gray-200 rounded-xl p-5 space-y-3">
             <div>
               <div className="text-sm font-semibold text-gray-900">
-                Plano {planoSelecionado === 'starter' ? 'Starter' : 'Pro'} — {cicloAtual.label}
+                Plano {nomeExibicao[planoSelecionado]} — {cicloAtual.label}
               </div>
               <div className="text-xs text-gray-500 mt-0.5">{cicloAtual.detalhe}</div>
             </div>
