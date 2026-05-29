@@ -136,7 +136,7 @@ Buffer Redis → Busca Instância → PAUSE MODE → Busca Contato
 
 ---
 
-## Estado atual (2026-05-25)
+## Estado atual (2026-05-29)
 
 ### Concluído ✅
 - Onboarding conversacional (`OnboardingView.tsx` — chat BIA phases 0–5)
@@ -163,6 +163,7 @@ Buffer Redis → Busca Instância → PAUSE MODE → Busca Contato
 - Schema Supabase documentado em memória persistente
 
 ### Pendente ⏳
+- **Fluxo 1 n8n — segundo número**: IF adicionado antes do PAUSE MODE detecta se remetente = `personal_channel` → chama Olivia diretamente (node duplicado) → Divide Resposta. Implementado no n8n mas **JSONs não exportados** ainda
 - Exportar JSONs atualizados do n8n → `MCP_SAACS/Projeto MeuDIA/MeuDIA - Fluxo1.json` e `Fluxo2.json`
 - Ajustar onboarding (DigestStep): explicar canais de entrega do digest (dashboard, email, segundo número)
 - Revisão e atualização dos 4 prompts Next.js com base no knowledge base
