@@ -113,12 +113,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [])
 
+  function NavIcon({ d, d2, circle }: { d: string; d2?: string; circle?: { cx: number; cy: number; r: number } }) {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+        <path d={d} />
+        {d2 && <path d={d2} />}
+        {circle && <circle cx={circle.cx} cy={circle.cy} r={circle.r} />}
+      </svg>
+    )
+  }
+
   const NAV = [
-    { href: '/dashboard',               label: 'Meu Dia',       icon: '◈' },
-    { href: '/dashboard/assistente',    label: assistantName,   icon: '✦' },
-    { href: '/dashboard/contatos',      label: 'Contatos',      icon: '☰' },
-    { href: '/dashboard/configuracoes', label: 'Configurações', icon: '⚙' },
-    { href: '/dashboard/chat',          label: 'Dúvidas',       icon: '?' },
+    { href: '/dashboard',               label: 'Meu Dia',       icon: <NavIcon d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" d2="M9 22V12h6v10" /> },
+    { href: '/dashboard/assistente',    label: assistantName,   icon: <NavIcon d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /> },
+    { href: '/dashboard/contatos',      label: 'Contatos',      icon: <NavIcon d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" d2="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" circle={{ cx: 9, cy: 7, r: 4 }} /> },
+    { href: '/dashboard/configuracoes', label: 'Configurações', icon: <NavIcon d="M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" /> },
+    { href: '/dashboard/chat',          label: 'Dúvidas',       icon: <NavIcon d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" d2="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01" /> },
   ]
 
   async function handleLogout() {

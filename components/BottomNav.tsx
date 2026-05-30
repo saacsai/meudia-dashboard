@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 interface NavItem {
   href: string
   label: string
-  icon: string
+  icon: React.ReactNode
 }
 
 const UNLOCK_AT: Record<string, number> = {
@@ -45,7 +45,7 @@ export default function BottomNav({
         if (isLocked) {
           return (
             <div key={item.href} className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 opacity-30">
-              <span className="text-lg leading-none">{item.icon}</span>
+              <span className="leading-none">{item.icon}</span>
               <span className="text-[10px] text-gray-400 leading-none truncate w-full text-center px-1">{item.label}</span>
             </div>
           )
@@ -61,7 +61,7 @@ export default function BottomNav({
               className="text-lg leading-none"
               style={{ color: isActive ? primaryColor : '#9ca3af' }}
             >
-              {item.icon}
+              <span className="leading-none">{item.icon}</span>
             </span>
             <span
               className="text-[10px] leading-none truncate w-full text-center px-1 font-medium"
