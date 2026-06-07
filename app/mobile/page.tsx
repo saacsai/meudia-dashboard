@@ -30,6 +30,7 @@ export default function MobileHub() {
   const [instance, setInstance] = useState<InstanceInfo | null>(null)
   const [toggling, setToggling] = useState(false)
   const [completing, setCompleting] = useState<string | null>(null)
+  const [debug, setDebug] = useState('')
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [])
@@ -64,6 +65,7 @@ export default function MobileHub() {
         .eq('contact_priority', 'priority'),
     ])
 
+    setDebug(`inst:${inst.id.slice(0,8)} tasks_raw:${tasksRes.data?.length ?? 'null'} err:${tasksRes.error?.message ?? 'ok'}`)
     if (tasksRes.data) {
       const pendentes = (tasksRes.data as unknown as Task[]).filter(t => t.status === 'pendente').slice(0, 6)
       setTasks(pendentes)
@@ -130,6 +132,11 @@ export default function MobileHub() {
             : `${tasks.length} tarefa${tasks.length > 1 ? 's' : ''} pendente${tasks.length > 1 ? 's' : ''}${overdueCount > 0 ? ` · ${overdueCount} atrasada${overdueCount > 1 ? 's' : ''}` : ''}.`
           }
         </p>
+
+        {/* Debug temporário */}
+        {debug && (
+          <p className="text-[10px] font-mono mb-3 px-1" style={{ color: 'rgba(255,255,255,0.5)' }}>{debug}</p>
+        )}
 
         {/* Post-its */}
         {tasks.length > 0 && (
