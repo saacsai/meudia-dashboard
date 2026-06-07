@@ -11,6 +11,7 @@ interface Task {
   id: string
   title: string
   due_date: string | null
+  contact_groups: { name: string; color: string } | null
 }
 
 interface InstanceInfo {
@@ -36,14 +37,13 @@ export default function MobileHub() {
     if (!session) { router.push('/login?next=/mobile'); return }
 
     const userId = session.user.id
-    const firstName = (session.user.user_metadata?.full_name || '').split(' ')[0]
-    setUserName(firstName)
+    setUserName((session.user.user_metadata?.full_name || '').split(' ')[0])
 
     const today = new Date().toISOString().split('T')[0]
 
     const [tasksRes, instRes] = await Promise.all([
       supabase.from('tasks')
-        .select('id, title, due_date')
+        .select('id, title, due_date, contact_groups(name, color)')
         .eq('user_id', userId)
         .eq('completed', false)
         .lte('due_date', today)
@@ -56,7 +56,7 @@ export default function MobileHub() {
         .single(),
     ])
 
-    if (tasksRes.data) setTasks(tasksRes.data)
+    if (tasksRes.data) setTasks(tasksRes.data as unknown as Task[])
 
     if (instRes.data) {
       setInstance(instRes.data)
@@ -90,6 +90,8 @@ export default function MobileHub() {
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
+  const today = new Date().toISOString().split('T')[0]
+  const overdueCount = tasks.filter(t => t.due_date && t.due_date < today).length
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center" style={{ background: PRIMARY }}>
@@ -97,12 +99,10 @@ export default function MobileHub() {
     </div>
   )
 
-  const overdueCount = tasks.filter(t => t.due_date && t.due_date < new Date().toISOString().split('T')[0]).length
-
   return (
-    <div className="min-h-screen pb-8" style={{ background: '#F0F5F6' }}>
+    <div className="min-h-screen" style={{ background: '#F0F5F6' }}>
 
-      {/* Header verde */}
+      {/* Header verde — logo + saudação + post-its */}
       <div className="px-5 pt-10 pb-6" style={{ background: PRIMARY }}>
         <Image
           src="/meudia_marca.png"
@@ -115,50 +115,63 @@ export default function MobileHub() {
         <p className="text-white text-xl font-semibold">
           {greeting}{userName ? `, ${userName}` : ''}.
         </p>
-        <p className="text-sm mt-1" style={{ color: 'rgba(255,255,255,0.65)' }}>
+        <p className="text-sm mt-0.5 mb-5" style={{ color: 'rgba(255,255,255,0.65)' }}>
           {tasks.length === 0
             ? 'Nenhuma tarefa pendente para hoje.'
-            : `${tasks.length} tarefa${tasks.length > 1 ? 's' : ''} pendente${tasks.length > 1 ? 's' : ''}${overdueCount > 0 ? ` (${overdueCount} atrasada${overdueCount > 1 ? 's' : ''})` : ''}.`
+            : `${tasks.length} tarefa${tasks.length > 1 ? 's' : ''} pendente${tasks.length > 1 ? 's' : ''}${overdueCount > 0 ? ` · ${overdueCount} atrasada${overdueCount > 1 ? 's' : ''}` : ''}.`
           }
         </p>
-      </div>
 
-      <div className="px-4 space-y-3 mt-4">
-
-        {/* Tarefas */}
+        {/* Post-its */}
         {tasks.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-            <div className="px-4 pt-4 pb-1 flex items-center justify-between">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tarefas</p>
-              <span className="text-xs font-medium px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: PRIMARY }}>
-                {tasks.length}
-              </span>
-            </div>
+          <div className="space-y-2">
             {tasks.map(task => {
-              const overdue = task.due_date && task.due_date < new Date().toISOString().split('T')[0]
+              const groupColor = task.contact_groups?.color || 'rgba(255,255,255,0.3)'
+              const overdue = task.due_date && task.due_date < today
               return (
-                <div key={task.id} className="flex items-center gap-3 px-4 py-3 border-t border-gray-100">
+                <div
+                  key={task.id}
+                  className="bg-white rounded-xl flex items-center gap-3 px-3 py-3"
+                  style={{ borderLeft: `4px solid ${groupColor}` }}
+                >
                   <button
                     onClick={() => completeTask(task.id)}
                     disabled={completing === task.id}
                     className="w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-colors disabled:opacity-50"
-                    style={{ borderColor: overdue ? '#ef4444' : PRIMARY }}
+                    style={{ borderColor: groupColor === 'rgba(255,255,255,0.3)' ? '#9ca3af' : groupColor }}
                   >
                     {completing === task.id && (
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ background: PRIMARY }} />
+                      <div className="w-2.5 h-2.5 rounded-full bg-gray-400" />
                     )}
                   </button>
-                  <span className={`text-sm flex-1 ${overdue ? 'text-red-600' : 'text-gray-800'}`}>
-                    {task.title}
-                  </span>
-                  {overdue && (
-                    <span className="text-xs font-medium text-red-500 flex-shrink-0">atrasada</span>
-                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm leading-snug ${overdue ? 'text-red-600' : 'text-gray-900'}`}>
+                      {task.title}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                      {task.contact_groups && (
+                        <span
+                          className="text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white"
+                          style={{ backgroundColor: task.contact_groups.color }}
+                        >
+                          {task.contact_groups.name}
+                        </span>
+                      )}
+                      {overdue && (
+                        <span className="text-[10px] font-medium text-red-500">atrasada</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )
             })}
           </div>
         )}
+      </div>
+
+      {/* Seções abaixo */}
+      <div className="px-4 space-y-3 mt-4 pb-8">
 
         {/* Fila de mensagens prioritárias */}
         <button

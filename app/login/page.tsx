@@ -14,10 +14,18 @@ export default function LoginPage() {
   const [senhaConfirm, setSenhaConfirm] = useState('')
   const [whatsapp, setWhatsapp] = useState('')
   const [modo, setModo] = useState<'login' | 'cadastro' | 'recuperar'>('login')
+  const [nextUrl, setNextUrl] = useState('/dashboard')
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('modo') === 'cadastro') setModo('cadastro')
+    const next = params.get('next')
+    if (next) {
+      setNextUrl(next)
+    } else {
+      const isMobile = /mobile|android|iphone|ipad/i.test(navigator.userAgent)
+      setNextUrl(isMobile ? '/mobile' : '/dashboard')
+    }
   }, [])
 
   const [loading, setLoading] = useState(false)
@@ -35,7 +43,7 @@ export default function LoginPage() {
       setLoading(false)
       return
     }
-    window.location.href = '/dashboard'
+    window.location.href = nextUrl
   }
 
   async function handleCadastro(e: React.FormEvent) {
@@ -74,7 +82,7 @@ export default function LoginPage() {
     const supabase = getSupabase()
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: `${window.location.origin}${nextUrl}` },
     })
     if (error) { setErro(error.message); setLoading(false) }
   }
