@@ -31,6 +31,7 @@ export default function MobileHub() {
   const [toggling, setToggling] = useState(false)
   const [completing, setCompleting] = useState<string | null>(null)
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [])
 
   async function load() {
@@ -49,8 +50,6 @@ export default function MobileHub() {
 
     if (!inst) { setLoading(false); return }
     setInstance(inst)
-
-    const today = new Date().toISOString().split('T')[0]
 
     const [tasksRes, queueRes] = await Promise.all([
       supabase.from('tasks')
