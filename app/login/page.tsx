@@ -19,13 +19,7 @@ export default function LoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('modo') === 'cadastro') setModo('cadastro')
-    const next = params.get('next')
-    if (next) {
-      setNextUrl(next)
-    } else {
-      const isMobile = /mobile|android|iphone|ipad/i.test(navigator.userAgent)
-      setNextUrl(isMobile ? '/mobile' : '/dashboard')
-    }
+    setNextUrl(params.get('next') || '/dashboard')
   }, [])
 
   const [loading, setLoading] = useState(false)

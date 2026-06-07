@@ -2,7 +2,7 @@
   "name": "MeuDIA",
   "short_name": "MeuDIA",
   "description": "Organizado e priorizado. Todo dia.",
-  "start_url": "/mobile",
+  "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#2A5F6B",
   "theme_color": "#2A5F6B",

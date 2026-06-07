@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import { getSupabase } from '@/lib/supabase'
 import Toggle from '@/components/Toggle'
 import Link from 'next/link'
@@ -49,6 +50,7 @@ function dueBadge(due_date: string | null): { label: string; color: string } | n
   if (diff <= 3)  return { label: `${diff}d restantes`, color: '#f59e0b' }
   return { label: `até ${new Date(due_date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`, color: '#6b7280' }
 }
+
 const PRIORITY_COLOR: Record<string, { bg: string; border: string; dot: string }> = {
   alta:  { bg: '#fef2f2', border: '#fecaca', dot: '#ef4444' },
   media: { bg: '#fffbeb', border: '#fde68a', dot: '#f59e0b' },
@@ -60,7 +62,7 @@ const QUEUE_PRIORITY_COLOR: Record<string, string> = {
   muted: '#d1d5db',
 }
 
-const today = () => new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
+const todayLabel = () => new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
 
 export default function DashboardPage() {
   const [instance, setInstance] = useState<Instance | null>(null)
@@ -70,13 +72,17 @@ export default function DashboardPage() {
   const [pendentes, setPendentes] = useState(0)
   const [queue, setQueue] = useState<QueueMessage[]>([])
   const [togglingTask, setTogglingTask] = useState<string | null>(null)
+  const [userName, setUserName] = useState('')
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadData() }, [])
 
   async function loadData() {
     const supabase = getSupabase()
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
+
+    setUserName((session.user.user_metadata?.full_name || '').split(' ')[0])
 
     const { data: rows } = await supabase
       .from('instances')
@@ -88,9 +94,7 @@ export default function DashboardPage() {
 
     if (inst) {
       setInstance(inst)
-
       const todayDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-
       const [tasksRes, countRes, queueRes] = await Promise.all([
         supabase
           .from('tasks')
@@ -113,7 +117,6 @@ export default function DashboardPage() {
           .order('received_at', { ascending: false })
           .limit(50)
       ])
-
       setTasks((tasksRes.data as unknown as Task[]) || [])
       setPendentes(countRes.count || 0)
       setQueue(queueRes.data || [])
@@ -138,10 +141,14 @@ export default function DashboardPage() {
   async function toggleTask(task: Task) {
     setTogglingTask(task.id)
     const newStatus = task.status === 'pendente' ? 'feito' : 'pendente'
-    const supabase = getSupabase()
-    await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id)
+    await getSupabase().from('tasks').update({ status: newStatus }).eq('id', task.id)
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: newStatus } : t))
     setTogglingTask(null)
+  }
+
+  async function handleLogout() {
+    await getSupabase().auth.signOut()
+    window.location.href = '/login'
   }
 
   if (loading) return <div className="text-sm text-gray-400">Carregando…</div>
@@ -159,14 +166,39 @@ export default function DashboardPage() {
 
   const pendingTasks = tasks.filter(t => t.status === 'pendente')
   const doneTasks    = tasks.filter(t => t.status === 'feito')
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
 
-      {/* Header do dia */}
-      <div className="flex items-center justify-between">
+      {/* Header mobile — oculto no desktop */}
+      <div className="md:hidden -mx-4 -mt-4 px-5 pt-10 pb-6 mb-2" style={{ background: PRIMARY }}>
+        <div className="flex items-start justify-between mb-4">
+          <Image src="/meudia_marca.png" alt="MeuDIA" width={140} height={52} className="object-contain" priority />
+          <button
+            onClick={handleLogout}
+            className="text-xs px-3 py-1.5 rounded-lg mt-1"
+            style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)' }}
+          >
+            Sair
+          </button>
+        </div>
+        <p className="text-white text-xl font-semibold">
+          {greeting}{userName ? `, ${userName}` : ''}.
+        </p>
+        <p className="text-sm mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
+          {pendingTasks.length === 0
+            ? 'Nenhuma tarefa pendente.'
+            : `${pendingTasks.length} tarefa${pendingTasks.length > 1 ? 's' : ''} pendente${pendingTasks.length > 1 ? 's' : ''}.`
+          }
+        </p>
+      </div>
+
+      {/* Header do dia — apenas desktop */}
+      <div className="hidden md:flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 capitalize">{today()}</h1>
+          <h1 className="text-xl font-bold text-gray-900 capitalize">{todayLabel()}</h1>
           <p className="text-xs text-gray-400 mt-0.5">
             {pendingTasks.length === 0
               ? 'Nenhuma tarefa pendente'
@@ -174,10 +206,7 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div
-            className="w-2 h-2 rounded-full transition-colors"
-            style={{ backgroundColor: instance.paused ? '#d1d5db' : '#22c55e' }}
-          />
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: instance.paused ? '#d1d5db' : '#22c55e' }} />
           <Toggle value={!instance.paused} onToggle={togglePause} loading={toggling} color={PRIMARY} />
         </div>
       </div>
@@ -200,9 +229,7 @@ export default function DashboardPage() {
             <p className="text-sm text-gray-400 mb-3">Nenhuma tarefa para hoje.</p>
             <p className="text-xs text-gray-400">
               Diga para <strong>{instance.persona_name}</strong> o que precisa fazer hoje →{' '}
-              <Link href="/dashboard/assistente" className="underline" style={{ color: PRIMARY }}>
-                abrir chat
-              </Link>
+              <Link href="/dashboard/assistente" className="underline" style={{ color: PRIMARY }}>abrir chat</Link>
             </p>
           </div>
         ) : (
@@ -211,15 +238,12 @@ export default function DashboardPage() {
               const colors = PRIORITY_COLOR[task.priority] || PRIORITY_COLOR.media
               const groupColor = task.contact_groups?.color
               return (
-                <div
-                  key={task.id}
-                  className="flex items-start gap-3 py-3.5 transition-colors hover:bg-gray-50"
-                  style={{
-                    paddingLeft: groupColor ? '17px' : '20px',
-                    paddingRight: '20px',
-                    borderLeft: groupColor ? `3px solid ${groupColor}` : undefined,
-                  }}
-                >
+                <div key={task.id} className="flex items-start gap-3 px-5 py-3.5 transition-colors hover:bg-gray-50">
+                  {/* Dot grupo */}
+                  <div
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5"
+                    style={{ backgroundColor: groupColor || '#e5e7eb' }}
+                  />
                   {/* Checkbox */}
                   <button
                     onClick={() => toggleTask(task)}
@@ -247,9 +271,7 @@ export default function DashboardPage() {
                       {(() => {
                         const badge = dueBadge(task.due_date)
                         return badge ? (
-                          <span className="text-[10px] font-medium" style={{ color: badge.color }}>
-                            {badge.label}
-                          </span>
+                          <span className="text-[10px] font-medium" style={{ color: badge.color }}>{badge.label}</span>
                         ) : null
                       })()}
                     </div>
@@ -258,12 +280,12 @@ export default function DashboardPage() {
               )
             })}
 
-            {/* Concluídas (colapsadas) */}
             {doneTasks.length > 0 && (
               <div className="px-5 py-3">
                 <p className="text-xs text-gray-400 mb-2">{doneTasks.length} concluída{doneTasks.length > 1 ? 's' : ''}</p>
                 {doneTasks.map(task => (
                   <div key={task.id} className="flex items-center gap-3 py-1.5">
+                    <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: task.contact_groups?.color || '#e5e7eb' }} />
                     <button
                       onClick={() => toggleTask(task)}
                       disabled={togglingTask === task.id}
@@ -281,6 +303,33 @@ export default function DashboardPage() {
             )}
           </div>
         )}
+      </div>
+
+      {/* Olivia toggle — apenas mobile (desktop tem no header) */}
+      <div className="md:hidden bg-white rounded-2xl border border-gray-200 px-4 py-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Olivia</p>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: instance.paused ? '#f59e0b' : '#22c55e' }} />
+              <p className="text-sm font-semibold text-gray-900">{instance.paused ? 'Pausada' : 'Ativa'}</p>
+            </div>
+            <p className="text-xs text-gray-500 mt-0.5 ml-4">
+              {instance.paused ? 'Não está respondendo mensagens' : 'Respondendo mensagens por você'}
+            </p>
+          </div>
+          <button
+            onClick={togglePause}
+            disabled={toggling}
+            className="text-xs font-semibold px-4 py-2 rounded-xl flex-shrink-0 disabled:opacity-50"
+            style={{
+              background: instance.paused ? '#dcfce7' : '#fef9c3',
+              color: instance.paused ? '#16a34a' : '#92400e',
+            }}
+          >
+            {toggling ? '…' : instance.paused ? 'Retomar' : 'Pausar'}
+          </button>
+        </div>
       </div>
 
       {/* Mensagens acumuladas */}
