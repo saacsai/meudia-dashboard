@@ -94,7 +94,7 @@ export default function DashboardPage() {
       const [tasksRes, countRes, queueRes] = await Promise.all([
         supabase
           .from('tasks')
-          .select('id, title, priority, status, date, due_date, origin_group_id, contact_groups!origin_group_id(name, color)')
+          .select('id, title, priority, status, date, due_date, origin_group_id')
           .eq('instance_id', inst.id)
           .lte('date', todayDate)
           .order('priority', { ascending: true }),
@@ -113,7 +113,24 @@ export default function DashboardPage() {
           .order('received_at', { ascending: false })
           .limit(50)
       ])
-      setTasks((tasksRes.data as unknown as Task[]) || [])
+
+      const rawTasks = (tasksRes.data || []) as Array<Omit<Task, 'contact_groups'> & { origin_group_id: string | null }>
+      const groupIds = [...new Set(rawTasks.map(t => t.origin_group_id).filter(Boolean))] as string[]
+      let groupMap: Record<string, { name: string; color: string }> = {}
+      if (groupIds.length > 0) {
+        const { data: groups } = await supabase
+          .from('contact_groups')
+          .select('id, name, color')
+          .in('id', groupIds)
+        if (groups) {
+          groupMap = Object.fromEntries(groups.map(g => [g.id, { name: g.name, color: g.color }]))
+        }
+      }
+      const mergedTasks: Task[] = rawTasks.map(t => ({
+        ...t,
+        contact_groups: t.origin_group_id ? (groupMap[t.origin_group_id] ?? null) : null,
+      }))
+      setTasks(mergedTasks)
       setPendentes(countRes.count || 0)
       setQueue(queueRes.data || [])
     }
@@ -214,8 +231,7 @@ export default function DashboardPage() {
                   <button
                     onClick={() => toggleTask(task)}
                     disabled={togglingTask === task.id}
-                    className="mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors"
-                    style={{ borderColor: colors.dot, background: 'white' }}
+                    className="mt-0.5 w-5 h-5 rounded-md border-2 border-gray-300 flex items-center justify-center flex-shrink-0 transition-colors bg-white"
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-900 leading-snug">{task.title}</p>
