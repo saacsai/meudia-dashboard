@@ -10,7 +10,9 @@ const PRIMARY = '#2A5F6B'
 interface Task {
   id: string
   title: string
+  date: string
   due_date: string | null
+  status: string
   contact_groups: { name: string; color: string } | null
 }
 
@@ -36,39 +38,37 @@ export default function MobileHub() {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { router.push('/login?next=/mobile'); return }
 
-    const userId = session.user.id
     setUserName((session.user.user_metadata?.full_name || '').split(' ')[0])
+
+    const { data: inst } = await supabase
+      .from('instances')
+      .select('id, pause_mode')
+      .eq('user_id', session.user.id)
+      .eq('active', true)
+      .single()
+
+    if (!inst) { setLoading(false); return }
+    setInstance(inst)
 
     const today = new Date().toISOString().split('T')[0]
 
-    const [tasksRes, instRes] = await Promise.all([
+    const [tasksRes, queueRes] = await Promise.all([
       supabase.from('tasks')
-        .select('id, title, due_date, contact_groups(name, color)')
-        .eq('user_id', userId)
-        .eq('completed', false)
-        .lte('due_date', today)
-        .order('due_date', { ascending: true })
+        .select('id, title, date, due_date, status, contact_groups(name, color)')
+        .eq('instance_id', inst.id)
+        .eq('status', 'pendente')
+        .or(`due_date.lte.${today},date.eq.${today}`)
+        .order('due_date', { ascending: true, nullsFirst: false })
         .limit(6),
-      supabase.from('instances')
-        .select('id, pause_mode')
-        .eq('user_id', userId)
-        .eq('active', true)
-        .single(),
+      supabase.from('message_queue')
+        .select('id', { count: 'exact', head: true })
+        .eq('instance_id', inst.id)
+        .eq('replied', false)
+        .eq('contact_priority', 'priority'),
     ])
 
     if (tasksRes.data) setTasks(tasksRes.data as unknown as Task[])
-
-    if (instRes.data) {
-      setInstance(instRes.data)
-      const { count } = await supabase
-        .from('message_queue')
-        .select('id', { count: 'exact', head: true })
-        .eq('instance_id', instRes.data.id)
-        .eq('replied', false)
-        .eq('contact_priority', 'priority')
-      setQueueCount(count || 0)
-    }
-
+    setQueueCount(queueRes.count || 0)
     setLoading(false)
   }
 
@@ -83,7 +83,7 @@ export default function MobileHub() {
 
   async function completeTask(id: string) {
     setCompleting(id)
-    await getSupabase().from('tasks').update({ completed: true }).eq('id', id)
+    await getSupabase().from('tasks').update({ status: 'feito' }).eq('id', id)
     setTasks(prev => prev.filter(t => t.id !== id))
     setCompleting(null)
   }
