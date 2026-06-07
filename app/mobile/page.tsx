@@ -57,8 +57,8 @@ export default function MobileHub() {
         .select('id, title, date, due_date, status, contact_groups(name, color)')
         .eq('instance_id', inst.id)
         .eq('status', 'pendente')
-        .or(`due_date.lte.${today},date.eq.${today}`)
         .order('due_date', { ascending: true, nullsFirst: false })
+        .order('date', { ascending: false })
         .limit(6),
       supabase.from('message_queue')
         .select('id', { count: 'exact', head: true })
@@ -104,14 +104,23 @@ export default function MobileHub() {
 
       {/* Header verde — logo + saudação + post-its */}
       <div className="px-5 pt-10 pb-6" style={{ background: PRIMARY }}>
-        <Image
-          src="/meudia_marca.png"
-          alt="MeuDIA"
-          width={150}
-          height={56}
-          className="object-contain mb-4"
-          priority
-        />
+        <div className="flex items-start justify-between mb-4">
+          <Image
+            src="/meudia_marca.png"
+            alt="MeuDIA"
+            width={150}
+            height={56}
+            className="object-contain"
+            priority
+          />
+          <button
+            onClick={async () => { await getSupabase().auth.signOut(); router.push('/login') }}
+            className="text-xs px-3 py-1.5 rounded-lg transition-colors mt-1"
+            style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)' }}
+          >
+            Sair
+          </button>
+        </div>
         <p className="text-white text-xl font-semibold">
           {greeting}{userName ? `, ${userName}` : ''}.
         </p>
