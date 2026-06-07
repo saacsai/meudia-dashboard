@@ -148,7 +148,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar — apenas desktop */}
       <div className="hidden md:block">
         <Sidebar
-          logoSrc="/meudia_logo.jpg"
+          logoSrc="/meudia_marca.jpg"
           productName="MeuDIA"
           navItems={NAV}
           userName={userName}

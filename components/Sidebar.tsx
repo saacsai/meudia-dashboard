@@ -62,13 +62,13 @@ export default function Sidebar({
       className="flex flex-col"
     >
       {/* Logo */}
-      <div className="flex justify-center pt-5 pb-4 px-4">
+      <div className="flex justify-center pt-6 pb-5 px-4">
         <Image
           src={logoSrc}
           alt={productName}
-          width={160}
-          height={160}
-          className="rounded-xl object-cover"
+          width={200}
+          height={75}
+          className="object-contain"
           priority
         />
       </div>
