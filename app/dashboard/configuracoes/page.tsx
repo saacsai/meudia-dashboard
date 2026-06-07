@@ -21,10 +21,25 @@ interface Instance {
 
 interface DigestSchedule {
   id: string
-  morning_time: string
-  afternoon_time: string
+  window_times: string[] | null
+  morning_time: string | null
+  afternoon_time: string | null
   timezone: string
   active: boolean
+}
+
+const TIME_OPTIONS = Array.from({ length: 48 }, (_, i) => {
+  const h = Math.floor(i / 2).toString().padStart(2, '0')
+  const m = i % 2 === 0 ? '00' : '30'
+  return `${h}:${m}`
+})
+
+function normalizeTimes(sched: DigestSchedule): string[] {
+  if (sched.window_times?.length) return sched.window_times
+  const times: string[] = []
+  if (sched.morning_time) times.push(sched.morning_time.slice(0, 5))
+  if (sched.afternoon_time) times.push(sched.afternoon_time.slice(0, 5))
+  return times.length ? times : ['08:00', '17:00']
 }
 
 const inputClass = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none transition-colors"
@@ -276,7 +291,8 @@ function DigestSection() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [form, setForm] = useState({ morning_time: '08:00', afternoon_time: '17:00', active: true })
+  const [windowTimes, setWindowTimes] = useState<string[]>(['08:00', '17:00'])
+  const [active, setActive] = useState(true)
 
   useEffect(() => {
     async function load() {
@@ -287,7 +303,7 @@ function DigestSection() {
       if (!inst) { setLoading(false); return }
       setInstanceId(inst.id)
       const { data: sched } = await supabase.from('digest_schedule').select('*').eq('instance_id', inst.id).single()
-      if (sched) { setSchedule(sched); setForm({ morning_time: sched.morning_time?.slice(0, 5) || '08:00', afternoon_time: sched.afternoon_time?.slice(0, 5) || '17:00', active: sched.active }) }
+      if (sched) { setSchedule(sched); setWindowTimes(normalizeTimes(sched)); setActive(sched.active) }
       setLoading(false)
     }
     load()
@@ -298,8 +314,9 @@ function DigestSection() {
     if (!instanceId) return
     setSaving(true)
     const supabase = getSupabase()
-    if (schedule) { await supabase.from('digest_schedule').update(form).eq('id', schedule.id) }
-    else { await supabase.from('digest_schedule').insert({ ...form, instance_id: instanceId }) }
+    const payload = { window_times: windowTimes, active }
+    if (schedule) { await supabase.from('digest_schedule').update(payload).eq('id', schedule.id) }
+    else { await supabase.from('digest_schedule').insert({ ...payload, instance_id: instanceId }) }
     setSaving(false); setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }
@@ -308,20 +325,42 @@ function DigestSection() {
 
   return (
     <form onSubmit={handleSave} className="space-y-4">
-      <p className="text-xs text-gray-500">Quando você vai revisar e responder as mensagens acumuladas.</p>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Manhã</label>
-          <input type="time" value={form.morning_time} onChange={e => setForm(f => ({ ...f, morning_time: e.target.value }))} className={inputClass} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''} />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Tarde</label>
-          <input type="time" value={form.afternoon_time} onChange={e => setForm(f => ({ ...f, afternoon_time: e.target.value }))} className={inputClass} onFocus={e => e.target.style.borderColor = PRIMARY} onBlur={e => e.target.style.borderColor = ''} />
-        </div>
+      <p className="text-xs text-gray-500">Momentos em que você revisa e responde as mensagens acumuladas. Mínimo 2, máximo 6.</p>
+      <div className="space-y-2">
+        {windowTimes.map((t, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 w-16 flex-shrink-0">Horário {i + 1}</span>
+            <select
+              value={t}
+              onChange={e => setWindowTimes(prev => prev.map((v, idx) => idx === i ? e.target.value : v))}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-sm outline-none transition-colors"
+              onFocus={e => e.target.style.borderColor = PRIMARY}
+              onBlur={e => e.target.style.borderColor = ''}
+            >
+              {TIME_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+            </select>
+            {windowTimes.length > 2 && (
+              <button
+                type="button"
+                onClick={() => setWindowTimes(prev => prev.filter((_, idx) => idx !== i))}
+                className="text-gray-400 hover:text-red-400 text-lg leading-none px-1"
+              >×</button>
+            )}
+          </div>
+        ))}
       </div>
+      {windowTimes.length < 6 && (
+        <button
+          type="button"
+          onClick={() => setWindowTimes(prev => [...prev, '12:00'])}
+          className="text-xs font-medium px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors"
+        >
+          + Adicionar horário
+        </button>
+      )}
       <div className="flex items-center gap-3">
-        <Toggle value={form.active} onToggle={() => setForm(f => ({ ...f, active: !f.active }))} color={PRIMARY} size="sm" />
-        <span className="text-xs text-gray-600">{form.active ? 'Resumos ativos' : 'Resumos desativados'}</span>
+        <Toggle value={active} onToggle={() => setActive(v => !v)} color={PRIMARY} size="sm" />
+        <span className="text-xs text-gray-600">{active ? 'Resumos ativos' : 'Resumos desativados'}</span>
       </div>
       <button type="submit" disabled={saving} className="w-full text-white text-sm font-medium rounded-xl py-2.5 disabled:opacity-50" style={{ backgroundColor: saved ? '#16a34a' : PRIMARY }}>
         {saving ? 'Salvando…' : saved ? '✓ Salvo' : 'Salvar horários'}
