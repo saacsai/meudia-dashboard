@@ -108,10 +108,10 @@ export default function LoginPage() {
         {/* Logo */}
         <div className="flex justify-center pt-8 pb-5">
           <Image
-            src="/meudia_marca.jpg"
+            src="/meudia_marca.png"
             alt="MeuDIA"
-            width={240}
-            height={90}
+            width={216}
+            height={81}
             className="object-contain"
             priority
           />

@@ -66,8 +66,8 @@ export default function Sidebar({
         <Image
           src={logoSrc}
           alt={productName}
-          width={200}
-          height={75}
+          width={180}
+          height={68}
           className="object-contain"
           priority
         />
