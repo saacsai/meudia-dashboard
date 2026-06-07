@@ -58,7 +58,7 @@ function IconChevron({ up }: { up: boolean }) {
   )
 }
 
-export default function AvatarMenu({ nomeExibido, email, initials, onEditarPerfil, onGerenciarPlano, onUsoCredits, onSair }: Props) {
+export default function AvatarMenu({ nomeExibido, email, initials, dark, onEditarPerfil, onGerenciarPlano, onUsoCredits, onSair }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -113,16 +113,19 @@ export default function AvatarMenu({ nomeExibido, email, initials, onEditarPerfi
 
       <button
         onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors text-left"
+        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-left"
+        style={{ background: 'transparent' }}
+        onMouseEnter={e => (e.currentTarget.style.background = dark ? 'rgba(255,255,255,0.1)' : '#f9fafb')}
+        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
       >
         <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-teal-400 flex items-center justify-center flex-shrink-0">
           <span className="text-white text-xs font-semibold">{initials}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-gray-800 truncate">{nomeExibido}</div>
-          <div className="text-xs text-gray-400 truncate">{email}</div>
+          <div className="text-sm font-medium truncate" style={{ color: dark ? '#ffffff' : '#1f2937' }}>{nomeExibido}</div>
+          <div className="text-xs truncate" style={{ color: dark ? 'rgba(255,255,255,0.55)' : '#9ca3af' }}>{email}</div>
         </div>
-        <span className="text-gray-400"><IconChevron up={open} /></span>
+        <span style={{ color: dark ? 'rgba(255,255,255,0.55)' : '#9ca3af' }}><IconChevron up={open} /></span>
       </button>
     </div>
   )
