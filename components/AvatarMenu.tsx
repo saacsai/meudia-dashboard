@@ -6,6 +6,7 @@ interface Props {
   nomeExibido: string
   email: string
   initials: string
+  dark?: boolean
   onEditarPerfil: () => void
   onGerenciarPlano: () => void
   onUsoCredits: () => void
