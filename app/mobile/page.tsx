@@ -54,11 +54,9 @@ export default function MobileHub() {
     const [tasksRes, queueRes] = await Promise.all([
       supabase.from('tasks')
         .select('id, title, date, due_date, status, contact_groups(name, color)')
-        .eq('instance_id', inst.id)
-        .eq('status', 'pendente')
         .order('due_date', { ascending: true, nullsFirst: false })
         .order('date', { ascending: false })
-        .limit(6),
+        .limit(20),
       supabase.from('message_queue')
         .select('id', { count: 'exact', head: true })
         .eq('instance_id', inst.id)
@@ -66,7 +64,10 @@ export default function MobileHub() {
         .eq('contact_priority', 'priority'),
     ])
 
-    if (tasksRes.data) setTasks(tasksRes.data as unknown as Task[])
+    if (tasksRes.data) {
+      const pendentes = (tasksRes.data as unknown as Task[]).filter(t => t.status === 'pendente').slice(0, 6)
+      setTasks(pendentes)
+    }
     setQueueCount(queueRes.count || 0)
     setLoading(false)
   }
