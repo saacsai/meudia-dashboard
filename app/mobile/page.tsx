@@ -18,7 +18,7 @@ interface Task {
 
 interface InstanceInfo {
   id: string
-  pause_mode: boolean
+  paused: boolean
 }
 
 export default function MobileHub() {
@@ -30,7 +30,6 @@ export default function MobileHub() {
   const [instance, setInstance] = useState<InstanceInfo | null>(null)
   const [toggling, setToggling] = useState(false)
   const [completing, setCompleting] = useState<string | null>(null)
-  const [debug, setDebug] = useState('')
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load() }, [])
@@ -44,7 +43,7 @@ export default function MobileHub() {
 
     const { data: inst } = await supabase
       .from('instances')
-      .select('id, pause_mode')
+      .select('id, paused')
       .eq('user_id', session.user.id)
       .eq('active', true)
       .single()
@@ -65,7 +64,6 @@ export default function MobileHub() {
         .eq('contact_priority', 'priority'),
     ])
 
-    setDebug(`inst:${inst.id.slice(0,8)} tasks_raw:${tasksRes.data?.length ?? 'null'} err:${tasksRes.error?.message ?? 'ok'}`)
     if (tasksRes.data) {
       const pendentes = (tasksRes.data as unknown as Task[]).filter(t => t.status === 'pendente').slice(0, 6)
       setTasks(pendentes)
@@ -77,9 +75,9 @@ export default function MobileHub() {
   async function togglePause() {
     if (!instance) return
     setToggling(true)
-    const newMode = !instance.pause_mode
-    await getSupabase().from('instances').update({ pause_mode: newMode }).eq('id', instance.id)
-    setInstance(prev => prev ? { ...prev, pause_mode: newMode } : prev)
+    const newMode = !instance.paused
+    await getSupabase().from('instances').update({ paused: newMode }).eq('id', instance.id)
+    setInstance(prev => prev ? { ...prev, paused: newMode } : prev)
     setToggling(false)
   }
 
@@ -132,11 +130,6 @@ export default function MobileHub() {
             : `${tasks.length} tarefa${tasks.length > 1 ? 's' : ''} pendente${tasks.length > 1 ? 's' : ''}${overdueCount > 0 ? ` · ${overdueCount} atrasada${overdueCount > 1 ? 's' : ''}` : ''}.`
           }
         </p>
-
-        {/* Debug temporário */}
-        {debug && (
-          <p className="text-[10px] font-mono mb-3 px-1" style={{ color: 'rgba(255,255,255,0.5)' }}>{debug}</p>
-        )}
 
         {/* Post-its */}
         {tasks.length > 0 && (
@@ -225,14 +218,14 @@ export default function MobileHub() {
               <div className="flex items-center gap-2">
                 <div
                   className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: instance?.pause_mode ? '#f59e0b' : '#22c55e' }}
+                  style={{ backgroundColor: instance?.paused ? '#f59e0b' : '#22c55e' }}
                 />
                 <p className="text-sm font-semibold text-gray-900">
-                  {instance?.pause_mode ? 'Pausada' : 'Ativa'}
+                  {instance?.paused ? 'Pausada' : 'Ativa'}
                 </p>
               </div>
               <p className="text-xs text-gray-500 mt-0.5 ml-4">
-                {instance?.pause_mode
+                {instance?.paused
                   ? 'Não está respondendo mensagens'
                   : 'Respondendo mensagens por você'
                 }
@@ -243,11 +236,11 @@ export default function MobileHub() {
               disabled={toggling || !instance}
               className="text-xs font-semibold px-4 py-2 rounded-xl flex-shrink-0 transition-all disabled:opacity-50"
               style={{
-                background: instance?.pause_mode ? '#dcfce7' : '#fef9c3',
-                color: instance?.pause_mode ? '#16a34a' : '#92400e',
+                background: instance?.paused ? '#dcfce7' : '#fef9c3',
+                color: instance?.paused ? '#16a34a' : '#92400e',
               }}
             >
-              {toggling ? '…' : instance?.pause_mode ? 'Retomar' : 'Pausar'}
+              {toggling ? '…' : instance?.paused ? 'Retomar' : 'Pausar'}
             </button>
           </div>
         </div>
