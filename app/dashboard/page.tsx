@@ -115,7 +115,7 @@ export default function DashboardPage() {
       ])
 
       const rawTasks = (tasksRes.data || []) as Array<Omit<Task, 'contact_groups'> & { origin_group_id: string | null }>
-      const groupIds = [...new Set(rawTasks.map(t => t.origin_group_id).filter(Boolean))] as string[]
+      const groupIds = Array.from(new Set(rawTasks.map(t => t.origin_group_id).filter(Boolean))) as string[]
       let groupMap: Record<string, { name: string; color: string }> = {}
       if (groupIds.length > 0) {
         const { data: groups } = await supabase
