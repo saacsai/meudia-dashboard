@@ -112,8 +112,8 @@ export default function LoginPage() {
           <Image
             src="/meudia_marca.png"
             alt="MeuDIA"
-            width={216}
-            height={81}
+            width={194}
+            height={73}
             className="object-contain"
             priority
           />

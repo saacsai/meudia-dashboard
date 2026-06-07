@@ -167,7 +167,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Header mobile — logo + sair — todas as abas */}
       <header className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3" style={{ background: PRIMARY }}>
-        <Image src="/meudia_marca.png" alt="MeuDIA" width={120} height={45} className="object-contain" priority />
+        <Image src="/meudia_marca.png" alt="MeuDIA" width={108} height={41} className="object-contain" priority />
         <button
           onClick={handleLogout}
           className="text-xs px-3 py-1.5 rounded-lg"
