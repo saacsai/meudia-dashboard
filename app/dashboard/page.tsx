@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
 import { getSupabase } from '@/lib/supabase'
 import Toggle from '@/components/Toggle'
 import Link from 'next/link'
@@ -72,7 +71,6 @@ export default function DashboardPage() {
   const [pendentes, setPendentes] = useState(0)
   const [queue, setQueue] = useState<QueueMessage[]>([])
   const [togglingTask, setTogglingTask] = useState<string | null>(null)
-  const [userName, setUserName] = useState('')
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadData() }, [])
@@ -81,8 +79,6 @@ export default function DashboardPage() {
     const supabase = getSupabase()
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) return
-
-    setUserName((session.user.user_metadata?.full_name || '').split(' ')[0])
 
     const { data: rows } = await supabase
       .from('instances')
@@ -98,7 +94,7 @@ export default function DashboardPage() {
       const [tasksRes, countRes, queueRes] = await Promise.all([
         supabase
           .from('tasks')
-          .select('id, title, priority, status, date, due_date, origin_group_id, contact_groups(name, color)')
+          .select('id, title, priority, status, date, due_date, origin_group_id, contact_groups!origin_group_id(name, color)')
           .eq('instance_id', inst.id)
           .lte('date', todayDate)
           .order('priority', { ascending: true }),
@@ -146,11 +142,6 @@ export default function DashboardPage() {
     setTogglingTask(null)
   }
 
-  async function handleLogout() {
-    await getSupabase().auth.signOut()
-    window.location.href = '/login'
-  }
-
   if (loading) return <div className="text-sm text-gray-400">Carregando…</div>
 
   if (!instance) return (
@@ -166,34 +157,9 @@ export default function DashboardPage() {
 
   const pendingTasks = tasks.filter(t => t.status === 'pendente')
   const doneTasks    = tasks.filter(t => t.status === 'feito')
-  const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
-
-      {/* Header mobile — oculto no desktop */}
-      <div className="md:hidden -mx-4 -mt-4 px-5 pt-10 pb-6 mb-2" style={{ background: PRIMARY }}>
-        <div className="flex items-start justify-between mb-4">
-          <Image src="/meudia_marca.png" alt="MeuDIA" width={140} height={52} className="object-contain" priority />
-          <button
-            onClick={handleLogout}
-            className="text-xs px-3 py-1.5 rounded-lg mt-1"
-            style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)' }}
-          >
-            Sair
-          </button>
-        </div>
-        <p className="text-white text-xl font-semibold">
-          {greeting}{userName ? `, ${userName}` : ''}.
-        </p>
-        <p className="text-sm mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>
-          {pendingTasks.length === 0
-            ? 'Nenhuma tarefa pendente.'
-            : `${pendingTasks.length} tarefa${pendingTasks.length > 1 ? 's' : ''} pendente${pendingTasks.length > 1 ? 's' : ''}.`
-          }
-        </p>
-      </div>
 
       {/* Header do dia — apenas desktop */}
       <div className="hidden md:flex items-center justify-between">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { getSupabase } from '@/lib/supabase'
 import Sidebar from '@/components/Sidebar'
@@ -163,6 +164,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           unreadCount={unreadCount}
         />
       </div>
+
+      {/* Header mobile — logo + sair — todas as abas */}
+      <header className="md:hidden sticky top-0 z-40 flex items-center justify-between px-4 py-3" style={{ background: PRIMARY }}>
+        <Image src="/meudia_marca.png" alt="MeuDIA" width={120} height={45} className="object-contain" priority />
+        <button
+          onClick={handleLogout}
+          className="text-xs px-3 py-1.5 rounded-lg"
+          style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.7)' }}
+        >
+          Sair
+        </button>
+      </header>
 
       {/* Bottom navigation — apenas mobile */}
       <BottomNav
