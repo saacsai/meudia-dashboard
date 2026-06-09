@@ -44,7 +44,7 @@ export default function BottomNav({
 
         if (isLocked) {
           return (
-            <div key={item.href} className="flex-1 flex flex-col items-center justify-center py-3.5 gap-0.5 opacity-30">
+            <div key={item.href} className="flex-1 flex flex-col items-center justify-center py-5 gap-0.5 opacity-30">
               <span className="leading-none">{item.icon}</span>
               <span className="text-[10px] text-gray-400 leading-none truncate w-full text-center px-1">{item.label}</span>
             </div>
@@ -55,7 +55,7 @@ export default function BottomNav({
           <Link
             key={item.href}
             href={item.href}
-            className="flex-1 flex flex-col items-center justify-center py-3.5 gap-0.5 transition-colors"
+            className="flex-1 flex flex-col items-center justify-center py-5 gap-0.5 transition-colors"
           >
             <span
               className="text-lg leading-none"
