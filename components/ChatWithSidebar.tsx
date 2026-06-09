@@ -296,14 +296,31 @@ export default function ChatWithSidebar({
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
   }
 
-  function formatDate(iso: string) {
-    const d = new Date(iso)
+  function groupConversations(convs: Conversation[]) {
     const now = new Date()
-    const diffDays = Math.floor((now.getTime() - d.getTime()) / 86400000)
-    if (diffDays === 0) return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-    if (diffDays === 1) return 'ontem'
-    if (diffDays < 7) return d.toLocaleDateString('pt-BR', { weekday: 'short' })
-    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+    const today    = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+    const week7     = new Date(today); week7.setDate(today.getDate() - 7)
+    const month30   = new Date(today); month30.setDate(today.getDate() - 30)
+
+    const groups: { label: string; items: Conversation[] }[] = [
+      { label: 'Hoje',            items: [] },
+      { label: 'Ontem',           items: [] },
+      { label: 'Últimos 7 dias',  items: [] },
+      { label: 'Últimos 30 dias', items: [] },
+      { label: 'Mais antigas',    items: [] },
+    ]
+
+    for (const conv of convs) {
+      const d = new Date(conv.updated_at)
+      if      (d >= today)     groups[0].items.push(conv)
+      else if (d >= yesterday) groups[1].items.push(conv)
+      else if (d >= week7)     groups[2].items.push(conv)
+      else if (d >= month30)   groups[3].items.push(conv)
+      else                     groups[4].items.push(conv)
+    }
+
+    return groups.filter(g => g.items.length > 0)
   }
 
   return (
@@ -337,22 +354,29 @@ export default function ChatWithSidebar({
         </div>
 
         {/* Conversations list */}
-        <div className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5">
+        <div className="flex-1 overflow-y-auto px-2 pb-4">
           {loadingConvs ? (
             <p className="text-xs text-gray-400 px-3 py-2">Carregando…</p>
           ) : conversations.length === 0 ? (
             <p className="text-xs text-gray-400 px-3 py-2">Nenhuma conversa ainda.</p>
           ) : (
-            conversations.map(conv => (
-              <div key={conv.id}>
-                <ConversationItem
-                  conv={conv}
-                  active={conv.id === currentConvId}
-                  onSelect={() => selectConversation(conv.id)}
-                  onDelete={() => deleteConversation(conv.id)}
-                  onRename={title => renameConversation(conv.id, title)}
-                />
-                <p className="text-[10px] text-gray-400 px-3 pb-1">{formatDate(conv.updated_at)}</p>
+            groupConversations(conversations).map(group => (
+              <div key={group.label} className="mb-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-3 py-1.5">
+                  {group.label}
+                </p>
+                <div className="space-y-0.5">
+                  {group.items.map(conv => (
+                    <ConversationItem
+                      key={conv.id}
+                      conv={conv}
+                      active={conv.id === currentConvId}
+                      onSelect={() => selectConversation(conv.id)}
+                      onDelete={() => deleteConversation(conv.id)}
+                      onRename={title => renameConversation(conv.id, title)}
+                    />
+                  ))}
+                </div>
               </div>
             ))
           )}
