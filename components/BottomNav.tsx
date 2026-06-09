@@ -20,6 +20,7 @@ const UNLOCK_AT: Record<string, number> = {
 interface Props {
   navItems: NavItem[]
   primaryColor: string
+  accentColor?: string
   onboardingStep?: number
   onboardingCompleted?: boolean
 }
@@ -27,6 +28,7 @@ interface Props {
 export default function BottomNav({
   navItems,
   primaryColor,
+  accentColor = '#8FC8D4',
   onboardingStep = 4,
   onboardingCompleted = true,
 }: Props) {
@@ -34,19 +36,20 @@ export default function BottomNav({
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 flex items-stretch md:hidden"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      className="fixed bottom-0 left-0 right-0 z-50 flex items-stretch md:hidden"
+      style={{ background: primaryColor, paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       {navItems.map(item => {
         const unlockAt = UNLOCK_AT[item.href] ?? 4
         const isLocked = !onboardingCompleted && onboardingStep < unlockAt && unlockAt !== -1
         const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+        const color = isActive ? accentColor : 'rgba(255,255,255,0.5)'
 
         if (isLocked) {
           return (
-            <div key={item.href} className="flex-1 flex flex-col items-center justify-center py-5 gap-0.5 opacity-30">
-              <span className="leading-none">{item.icon}</span>
-              <span className="text-[10px] text-gray-400 leading-none truncate w-full text-center px-1">{item.label}</span>
+            <div key={item.href} className="flex-1 flex flex-col items-center justify-center py-7 gap-1 opacity-25">
+              <span className="leading-none" style={{ color: 'rgba(255,255,255,0.5)' }}>{item.icon}</span>
+              <span className="text-[10px] leading-none truncate w-full text-center px-1" style={{ color: 'rgba(255,255,255,0.5)' }}>{item.label}</span>
             </div>
           )
         }
@@ -55,26 +58,12 @@ export default function BottomNav({
           <Link
             key={item.href}
             href={item.href}
-            className="flex-1 flex flex-col items-center justify-center py-5 gap-0.5 transition-colors"
+            className="flex-1 flex flex-col items-center justify-center py-7 gap-1 transition-colors"
           >
-            <span
-              className="text-lg leading-none"
-              style={{ color: isActive ? primaryColor : '#9ca3af' }}
-            >
-              <span className="leading-none">{item.icon}</span>
-            </span>
-            <span
-              className="text-[10px] leading-none truncate w-full text-center px-1 font-medium"
-              style={{ color: isActive ? primaryColor : '#9ca3af' }}
-            >
+            <span className="leading-none" style={{ color }}>{item.icon}</span>
+            <span className="text-[10px] leading-none truncate w-full text-center px-1 font-medium" style={{ color }}>
               {item.label}
             </span>
-            {isActive && (
-              <span
-                className="absolute bottom-0 w-8 h-0.5 rounded-full"
-                style={{ backgroundColor: primaryColor }}
-              />
-            )}
           </Link>
         )
       })}
