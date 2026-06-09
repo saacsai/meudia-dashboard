@@ -116,15 +116,12 @@ export default function DashboardPage() {
 
       const rawTasks = (tasksRes.data || []) as Array<Omit<Task, 'contact_groups'> & { origin_group_id: string | null }>
       const groupIds = Array.from(new Set(rawTasks.map(t => t.origin_group_id).filter(Boolean))) as string[]
-      console.log('[dot-debug] rawTasks:', rawTasks.map(t => ({ id: t.id, title: t.title, origin_group_id: t.origin_group_id })))
-      console.log('[dot-debug] groupIds:', groupIds)
       let groupMap: Record<string, { name: string; color: string }> = {}
       if (groupIds.length > 0) {
-        const { data: groups, error: groupsError } = await supabase
+        const { data: groups } = await supabase
           .from('contact_groups')
           .select('id, name, color')
           .in('id', groupIds)
-        console.log('[dot-debug] groups:', groups, 'error:', groupsError)
         if (groups) {
           groupMap = Object.fromEntries(groups.map(g => [g.id, { name: g.name, color: g.color }]))
         }

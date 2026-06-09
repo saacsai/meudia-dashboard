@@ -136,7 +136,7 @@ Buffer Redis → Busca Instância → PAUSE MODE → Busca Contato
 
 ---
 
-## Estado atual (2026-05-29)
+## Estado atual (2026-06-09)
 
 ### Concluído ✅
 - Onboarding conversacional (`OnboardingView.tsx` — chat BIA phases 0–5)
@@ -144,34 +144,37 @@ Buffer Redis → Busca Instância → PAUSE MODE → Busca Contato
 - n8n Fluxo 1 implementado e validado (texto, áudio, imagem, PDF)
 - Endpoints `/api/whatsapp/bia` e `/api/whatsapp/olivia`
 - Ferramentas Olivia: `pausar_agente`, `retomar_agente`
-- UX mobile: título conversa no header, botão `+`, seção Conta em Configurações
 - `INTERNAL_API_KEY` e `RESEND_API_KEY` configuradas no Vercel
-- Post-its seguem cor do grupo (borda esquerda + chip colorido)
 - Grupos de contatos com campo "Objetivo" (descrição livre)
 - Janelas de resposta variáveis (2–6 por dia, configuráveis na tela)
 - Notificações por email via Resend: toggle + escopo (prioritários / todas)
-  - Domínio `meudia.saacs.com.br` verificado no Resend
-  - n8n passa `contact_jid` para check de prioridade no scope "somente prioritários"
-- Base de conhecimento da BIA: `saacs-brain/products/meudia/bia-knowledge-base.md`
 - Badge de notificações no Sidebar (contatos prioritários não lidos)
-- n8n Fluxo 2 implementado e validado (digest cron multi-instância via Loop Over Items)
-  - Filtro por `window_times` em JavaScript (Code node)
-  - Geração de resumo via Gemini 2.5 Flash
-  - Envio via Evolution API para número principal ou `personal_channel` (segundo número)
+- n8n Fluxo 2 implementado e validado (digest cron multi-instância)
 - Campo "Segundo número" em Configurações → salva em `instances.personal_channel`
-- Fix: `instances.phone_number` sincroniza automaticamente ao salvar perfil com WhatsApp
 - Schema Supabase documentado em memória persistente
+- **[2026-06-09] Design system mobile completo:**
+  - Aplicação negativa: login page + sidebar com fundo verde, logo branca
+  - Header mobile sticky (logo + Sair) em todas as abas do dashboard
+  - BottomNav: fundo primaryColor, ícones brancos, item ativo em accentColor, `py-7`, sem barra indicadora — **padrão SAACS para todos os produtos**
+  - Dot de grupo nas tarefas: fetch separado de `contact_groups` (fix RLS), cor preenchida
+  - PWA: `manifest.json` + `apple-touch-icon` + ícone quadrado (`icone_meu_dia.png`)
+  - Logo reduzida 10% em sidebar, login e header mobile
+- **[2026-06-09] Chat Olivia + BIA — padrão LLM apps:**
+  - Histórico agrupado por data (Hoje / Ontem / Últimos 7 dias / Últimos 30 dias / Mais antigas)
+  - Input redesenhado em card branco (estilo Claude)
+  - Microfone com Web Speech API (`pt-BR`) — transcreve fala para o campo de texto
+  - Botão `+` com menu de anexos (Foto / Arquivo — "Em breve")
 
 ### Pendente ⏳
-- **Fluxo 1 n8n — segundo número**: IF adicionado antes do PAUSE MODE detecta se remetente = `personal_channel` → chama Olivia diretamente (node duplicado) → Divide Resposta. Implementado no n8n mas **JSONs não exportados** ainda
+- **Testar microfone e chat** no celular (ainda não testado em produção)
+- **Fluxo 1 n8n — segundo número**: implementado no n8n, **JSONs não exportados** ainda
 - Exportar JSONs atualizados do n8n → `MCP_SAACS/Projeto MeuDIA/MeuDIA - Fluxo1.json` e `Fluxo2.json`
-- Ajustar onboarding (DigestStep): explicar canais de entrega do digest (dashboard, email, segundo número)
+- Ajustar onboarding (DigestStep): explicar canais de entrega do digest
 - Revisão e atualização dos 4 prompts Next.js com base no knowledge base
 - Onboarding conversacional: revisar UX/textos (fases se misturam)
 - Painel visual de consumo de créditos no dashboard
 - Controle de créditos no Supabase (modelagem + lógica de bloqueio)
-- Email proativo em tentativas de ligação bloqueadas (cenário 2 do knowledge base)
-- MCP Cowork (ADR criado em `saacs-brain/decisions/`)
+- Email proativo em tentativas de ligação bloqueadas
 
 ---
 
