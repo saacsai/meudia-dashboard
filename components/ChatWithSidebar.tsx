@@ -147,6 +147,11 @@ export default function ChatWithSidebar({
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
 
+  // Input extras
+  const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [isListening, setIsListening] = useState(false)
+  const recognitionRef = useRef<unknown>(null)
+
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -294,6 +299,33 @@ export default function ChatWithSidebar({
 
   function handleKey(e: React.KeyboardEvent) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+  }
+
+  function handleMic() {
+    if (isListening) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(recognitionRef.current as any)?.stop()
+      setIsListening(false)
+      return
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SR) { alert('Seu navegador não suporta reconhecimento de voz.'); return }
+    const rec = new SR()
+    rec.lang = 'pt-BR'
+    rec.continuous = false
+    rec.interimResults = false
+    rec.onstart = () => setIsListening(true)
+    rec.onend   = () => setIsListening(false)
+    rec.onerror = () => setIsListening(false)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      const transcript: string = e.results[0][0].transcript
+      setInput(prev => prev ? `${prev} ${transcript}` : transcript)
+      setTimeout(() => inputRef.current?.focus(), 100)
+    }
+    recognitionRef.current = rec
+    rec.start()
   }
 
   function groupConversations(convs: Conversation[]) {
@@ -490,17 +522,21 @@ export default function ChatWithSidebar({
           <div ref={bottomRef} />
         </div>
 
-        {/* Input */}
-        <div className="pt-3 border-t border-gray-200">
-          <div className="flex gap-2 items-end">
+        {/* Input — card style */}
+        <div className="pt-3">
+          {/* Backdrop para fechar menu de anexo */}
+          {showAttachMenu && (
+            <div className="fixed inset-0 z-10" onClick={() => setShowAttachMenu(false)} />
+          )}
+          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-visible">
             <textarea
               ref={inputRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKey}
-              placeholder={`Mensagem para ${headerName}… (Enter para enviar)`}
+              placeholder={`Mensagem para ${headerName}…`}
               rows={1}
-              className="flex-1 resize-none rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:border-gray-400 bg-white"
+              className="w-full resize-none px-4 pt-3 pb-1 text-sm focus:outline-none bg-transparent"
               style={{ minHeight: '44px', maxHeight: '120px' }}
               onInput={e => {
                 const t = e.currentTarget
@@ -508,19 +544,73 @@ export default function ChatWithSidebar({
                 t.style.height = Math.min(t.scrollHeight, 120) + 'px'
               }}
             />
-            <button
-              onClick={send}
-              disabled={!input.trim() || sending}
-              className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-opacity disabled:opacity-40"
-              style={{ background: PRIMARY }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
+            <div className="flex items-center gap-1 px-3 pb-3 pt-1">
+              {/* + anexo */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowAttachMenu(v => !v)}
+                  className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center text-gray-500 hover:bg-gray-50 transition-colors"
+                  title="Anexar"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                </button>
+                {showAttachMenu && (
+                  <div className="absolute bottom-10 left-0 bg-white rounded-xl shadow-lg border border-gray-100 py-1 min-w-[168px] z-20">
+                    {[
+                      { label: 'Foto / Câmera', icon: '📷' },
+                      { label: 'Arquivo', icon: '📎' },
+                    ].map(opt => (
+                      <div key={opt.label} className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-400">
+                        <span>{opt.icon}</span>
+                        <span>{opt.label}</span>
+                        <span className="ml-auto text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full">Em breve</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1" />
+
+              {/* Microfone */}
+              <button
+                onClick={handleMic}
+                className="w-9 h-9 rounded-full flex items-center justify-center transition-colors"
+                style={isListening ? { background: '#ef4444' } : undefined}
+                title={isListening ? 'Parar gravação' : 'Falar'}
+              >
+                {isListening ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="6" y="6" width="12" height="12" rx="2"/>
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                  </svg>
+                )}
+              </button>
+
+              {/* Enviar */}
+              <button
+                onClick={send}
+                disabled={!input.trim() || sending}
+                className="w-9 h-9 rounded-full flex items-center justify-center transition-opacity disabled:opacity-30"
+                style={{ background: PRIMARY }}
+                title="Enviar"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <path d="M22 2L11 13M22 2L15 22L11 13M11 13L2 9L22 2" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
           </div>
-          <p className="text-[11px] text-gray-400 mt-1.5 text-center">
-            Shift+Enter para nova linha · Enter para enviar · Clique no título para renomear
+          <p className="text-[10px] text-gray-400 mt-1.5 text-center hidden md:block">
+            Shift+Enter para nova linha · Enter para enviar
           </p>
         </div>
       </div>
