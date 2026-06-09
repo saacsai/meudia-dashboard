@@ -9,7 +9,7 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/meuDIA_marca_s_slogan.png",
+      "src": "/icone_meu_dia.png",
       "sizes": "any",
       "type": "image/png",
       "purpose": "any maskable"
